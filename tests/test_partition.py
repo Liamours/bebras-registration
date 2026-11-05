@@ -1,0 +1,112 @@
+import openpyxl
+import pytest
+
+from registration.partition import partition, slugify, upload_header
+from registration.pipeline import process_file
+from registration.status import mark_uploaded, school_status
+from tests.conftest import CANON
+
+STAMP1, STAMP2 = "20261105-1000", "20261105-1100"
+
+
+def process(make_workbook, cfg, replies, name, rows):
+    process_file(make_workbook(name, rows), cfg, replies, cfg["paths"]["standardized"])
+
+
+def state(report, school):
+    return report[report["school"] == school].iloc[0]
+
+
+def read_upload(path):
+    ws = openpyxl.load_workbook(path).worksheets[0]
+    return [[c.value for c in r] for r in ws.iter_rows()], ws
+
+
+def test_slug():
+    assert slugify("SMP Negeri 1 Bandung") == "smp_negeri_1_bandung" and slugify("   ") == "unknown"
+
+
+def test_one_file_per_school_in_the_upload_format(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=128384139, **{"Nama Lengkap": "Zed Test"}), row(NISN=3000000002, **{"Nama Lengkap": "Amy Test"})])
+    report = partition(cfg, stamp=STAMP1)
+    r = state(report, "SMP Contoh")
+    assert (r["state"], r["rows"], r["file"]) == ("written", 2, f"smp_contoh-{STAMP1}.xlsx")
+    rows, ws = read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / r["file"])
+    assert rows[0] == CANON                                           # no official format file here: the configured columns
+    assert [x[CANON.index("Nama Lengkap")] for x in rows[1:]] == ["Amy Test", "Zed Test"]
+    assert [x[0] for x in rows[1:]] == [1, 2]                         # numbered again
+    nisn_cells = [ws.cell(row=i, column=3) for i in (2, 3)]
+    assert [c.value for c in nisn_cells] == ["3000000002", "0128384139"] and all(c.number_format == "@" for c in nisn_cells)
+    assert rows[1][CANON.index("Kelas")] == 7 and isinstance(rows[1][CANON.index("Kelas")], int)
+
+
+def test_a_school_with_errors_is_held_and_gets_no_file(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "b.xlsx", [row(**{"Nama Sekolah": "SMP Dua"}), row(**{"Nama Sekolah": "SMP Dua"}, NISN=None)])
+    report = partition(cfg, stamp=STAMP1)
+    r = state(report, "SMP Dua")
+    assert r["state"] == "held" and "1 rows with errors" in r["reason"]
+    assert not (cfg["paths"]["submit_ready"] / "smp_dua").exists()
+
+
+def test_later_students_go_into_a_new_file_and_earlier_files_are_untouched(make_workbook, cfg, replies, row):
+    first = [row(NISN=3000000001), row(NISN=3000000002)]
+    process(make_workbook, cfg, replies, "a.xlsx", first)
+    partition(cfg, stamp=STAMP1)
+    assert state(partition(cfg, stamp=STAMP2), "SMP Contoh")["state"] == "nothing_new"
+    process(make_workbook, cfg, replies, "a.xlsx", first + [row(NISN=3000000003)])
+    r = state(partition(cfg, stamp=STAMP2), "SMP Contoh")
+    assert (r["state"], r["rows"]) == ("written", 1)
+    folder = cfg["paths"]["submit_ready"] / "smp_contoh"
+    assert sorted(p.name for p in folder.glob("*.xlsx")) == [f"smp_contoh-{STAMP1}.xlsx", f"smp_contoh-{STAMP2}.xlsx"]
+    assert len(read_upload(folder / f"smp_contoh-{STAMP1}.xlsx")[0]) == 3          # header and two students, as before
+
+
+def test_categories_can_be_uploaded_one_after_another(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [
+        row(NISN=3000000001, Kategori="SiKecil", Kelas=2, Sesi="A"),
+        row(NISN=3000000002, Kategori="Siaga", Kelas=5, Sesi="A"),
+        row(NISN=3000000003, Kategori="Siaga", Kelas=6, Sesi="A"),
+    ])
+    r = state(partition(cfg, kategori=["SiKecil"], stamp=STAMP1), "SMP Contoh")
+    assert r["rows"] == 1
+    r = state(partition(cfg, kategori=["Siaga"], stamp=STAMP2), "SMP Contoh")
+    assert r["rows"] == 2
+
+
+def test_the_same_nisn_in_two_schools_holds_both(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001, **{"Nama Sekolah": "SMP A"}), row(NISN=3000000002, **{"Nama Sekolah": "SMP A"})])
+    process(make_workbook, cfg, replies, "b.xlsx", [row(NISN=3000000001, **{"Nama Sekolah": "SMP B"})])
+    report = partition(cfg, stamp=STAMP1)
+    assert state(report, "SMP A")["state"] == "held" and "repeated NISN" in state(report, "SMP A")["reason"]
+    assert state(report, "SMP B")["state"] == "held"
+
+
+def test_header_follows_the_official_format_file(make_workbook, cfg, replies, row):
+    official = openpyxl.Workbook()
+    official.active.append([c + " " if c == "Nama Biro" else c for c in CANON])      # the site's header has a trailing space
+    official.save(cfg["paths"]["upload_format"])
+    assert upload_header(cfg)[-1] == "Nama Biro "
+    process(make_workbook, cfg, replies, "a.xlsx", [row()])
+    partition(cfg, stamp=STAMP1)
+    rows, _ = read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / f"smp_contoh-{STAMP1}.xlsx")
+    assert rows[0][-1] == "Nama Biro " and rows[1][-1] == "Universitas Telkom"
+
+
+def test_a_format_file_with_other_columns_is_refused(cfg):
+    wrong = openpyxl.Workbook()
+    wrong.active.append(["Foo", "Bar"])
+    wrong.save(cfg["paths"]["upload_format"])
+    with pytest.raises(ValueError, match="different columns"):
+        upload_header(cfg)
+
+
+def test_school_status_held_ready_uploaded(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001), row(NISN=3000000002)])
+    process(make_workbook, cfg, replies, "b.xlsx", [row(NISN=None, **{"Nama Sekolah": "SMP Dua"})])
+    status = lambda: dict(zip(*[school_status(cfg["paths"]["standardized"], cfg["paths"]["submit_ready"], slugify)[c] for c in ("school", "state")]))
+    assert status() == {"SMP Contoh": "ready", "SMP Dua": "held"}
+    partition(cfg, stamp=STAMP1)
+    mark_uploaded(cfg["paths"]["submit_ready"], f"smp_contoh-{STAMP1}.xlsx")
+    assert status()["SMP Contoh"] == "uploaded"
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001), row(NISN=3000000002), row(NISN=3000000003)])
+    assert status()["SMP Contoh"] == "ready"                  # a new student is not on the site yet

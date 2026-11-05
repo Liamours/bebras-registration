@@ -1,86 +1,90 @@
-from pathlib import Path
-
-import openpyxl
 import pandas as pd
-import pytest
 
-from registration.cli import ROOT, load_config, standardize_file
+from registration.cli import ROOT, load_config
+from registration.pipeline import process_file
 from registration.readers import read_workbook
-from registration.standardize import normalize_values, rename_headers
-
-HEADER = ["No", "Nama Lengkap ", "NISN", "Email", "Gategori", "Gender", "Kelas", "Jenjang Sekolah", "Nama Sekolah",
-          "Kot/kabupaten", "Nama Pendamping", "No Kontak Pendamping", "Status Pendamping", "Bahasa", "Sesi", "Nama Biro"]
+from registration.standardize import drop_template_examples, normalize_values, rename_headers
 
 
-def make_workbook(path: Path, rows: list[list]) -> Path:
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.append(HEADER)
-    for r in rows:
-        ws.append(r)
-    ws.append([])
-    ws.append(["Keterangan", None, "catatan: instruction block"])
-    ws.append(["No:", "No Urut"])
-    wb.save(path)
-    return path
-
-
-GOOD = [1, "ANDI TEST", 3000000001, "andi@example.com", "penggalang", "laki laki", "7A", "SMP", "SMP Contoh", "BANDUNG",
-        "BUDI TEST", "+62 812-0000-0001", "Guru", "B. Indonesia", "b", "Universitas Telkom"]
-
-
-@pytest.fixture
-def cfg():
-    return load_config(ROOT / "configs" / "default.yaml")
-
-
-def run(tmp_path, cfg, rows):
-    df = read_workbook(make_workbook(tmp_path / "school.xlsx", rows))
+def run(make_workbook, cfg, rows):
+    df = read_workbook(make_workbook("school.xlsx", rows))
     df, _ = rename_headers(df, cfg)
     return normalize_values(df, cfg)
 
 
-def test_reader_stops_at_instruction_block(tmp_path):
-    df = read_workbook(make_workbook(tmp_path / "a.xlsx", [GOOD, GOOD]))
+def errors(issues):
+    return [(i.source_row, i.code) for i in issues if i.severity == "error"]
+
+
+def test_reader_stops_at_instruction_block(make_workbook, row):
+    df = read_workbook(make_workbook("a.xlsx", [row(), row()]))
     assert len(df) == 2 and list(df["source_row"]) == [2, 3]
 
 
-def test_variants_are_normalized(tmp_path, cfg):
-    table, issues = run(tmp_path, cfg, [GOOD])
-    row = table.iloc[0]
-    assert (row["Nama Lengkap"], row["Kategori"], row["Gender"], row["Kelas"]) == ("Andi Test", "Penggalang", "Laki-laki", 7)
-    assert (row["Kota/Kabupaten"], row["Nama Biro"], row["Bahasa"], row["Sesi"]) == ("Bandung", "Telkom University", "Indonesia", "B")
-    assert row["No Kontak Pendamping"] == "0812000000" + "01"
-    assert not [i for i in issues if i.severity == "error"]
+def test_variants_are_normalized(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row()])
+    r = table.iloc[0]
+    assert (r["Nama Lengkap"], r["Kategori"], r["Gender"], r["Kelas"]) == ("Andi Test", "Penggalang", "Laki-laki", 7)
+    assert (r["Kota/Kabupaten"], r["Nama Biro"], r["Bahasa"], r["Sesi"]) == ("Bandung", "Universitas Telkom", "Indonesia", "B")
+    assert r["Nama Pendamping"] == "Budi Test" and r["No Kontak Pendamping"] == "081200000001"
+    assert not errors(issues)
 
 
-def test_nisn_padded_or_missing(tmp_path, cfg):
-    nine, missing = list(GOOD), list(GOOD)
-    nine[2], missing[2] = 128384139, None
-    table, issues = run(tmp_path, cfg, [nine, missing])
-    assert table.iloc[0]["NISN"] == "0128384139" and table.iloc[1]["NISN"] == "-"
-    assert [i.reason for i in issues if i.severity == "error"] == ["missing NISN (needs kode_biro)"]
+def test_nisn_padded_missing_or_malformed(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(NISN=128384139), row(NISN=None), row(NISN="12345"), row(NISN="abcd_00001")])
+    assert list(table["NISN"]) == ["0128384139", "-", "12345", "abcd_00001"]
+    assert errors(issues) == [(3, "missing_nisn"), (4, "nisn_format")]
+    assert [(i.source_row, i.code) for i in issues if i.severity == "warning" and i.column == "NISN"] == [(2, "nisn_padded")]
 
 
-def test_kategori_checked_against_kelas(tmp_path, cfg):
-    wrong, blank = list(GOOD), list(GOOD)
-    wrong[4], blank[4] = "Siaga", None
-    table, issues = run(tmp_path, cfg, [wrong, blank])
+def test_kategori_checked_against_kelas(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(Kategori="Siaga"), row(Kategori=None)])
     assert table.iloc[1]["Kategori"] == "Penggalang"
-    assert [(i.source_row, i.severity) for i in issues if i.column == "Kategori"] == [(2, "error"), (3, "warning")]
+    assert [(i.source_row, i.code, i.severity) for i in issues if i.column == "Kategori"] == [(2, "kategori_mismatch", "error"), (3, "kategori_filled", "warning")]
 
 
-def test_overrides_fix_and_drop_rows(tmp_path, cfg):
-    path = make_workbook(tmp_path / "school.xlsx", [GOOD, GOOD, GOOD])
-    over = tmp_path / "overrides.csv"
+def test_session_must_fit_the_category(make_workbook, cfg, row):
+    rows = [
+        row(Kategori="SiKecil", Kelas=2, Sesi="E"),          # Friday has no E
+        row(Kategori="SiKecil", Kelas=2, Sesi="D"),
+        row(Kategori="Siaga", Kelas=5, Sesi="A1"),           # letters with 1 are Wednesday, Penggalang only
+        row(Kategori="Penggalang", Kelas=8, Sesi="A1"),
+        row(Kategori="Penegak", Kelas=11, Sesi="E"),
+        row(Sesi="Z"),
+    ]
+    _, issues = run(make_workbook, cfg, rows)
+    assert errors(issues) == [(2, "sesi_category"), (4, "sesi_category"), (7, "sesi_invalid")]
+
+
+def test_unknown_values_and_bad_class_are_errors(make_workbook, cfg, row):
+    _, issues = run(make_workbook, cfg, [row(Gender="x"), row(Kelas="abc"), row(Kelas=15)])
+    assert errors(issues) == [(2, "unknown_value"), (3, "kelas_invalid"), (4, "kelas_invalid")]
+
+
+def test_template_example_rows_are_dropped(make_workbook, cfg, row):
+    df = read_workbook(make_workbook("s.xlsx", [row(**{"Nama Lengkap": "Ananda Hening"}), row(), row(**{"Nama Lengkap": "Andika Perdana"})]))
+    df, _ = rename_headers(df, cfg)
+    kept, issues = drop_template_examples(df, cfg)
+    assert list(kept["Nama Lengkap"]) == ["ANDI TEST"]
+    assert [(i.source_row, i.code, i.severity) for i in issues] == [(2, "template_example", "warning"), (4, "template_example", "warning")]
+
+
+def test_overrides_fix_and_drop_rows(make_workbook, cfg, row, replies):
+    path = make_workbook("school.xlsx", [row(), row(), row()])
     pd.DataFrame([
         ["school.xlsx", 2, "Nama Sekolah", "SMP Benar", "typo"],
         ["school.xlsx", 3, "Nama Lengkap", "__drop__", "duplicate"],
         ["school.xlsx", 99, "Nama Sekolah", "x", "stale"],
-    ], columns=["source_file", "row", "column", "new_value", "reason"]).to_csv(over, index=False)
-    cfg["paths"]["overrides"] = over
-    rows, errors, warnings = standardize_file(path, cfg, tmp_path)
-    table = pd.read_csv(tmp_path / "school.csv", dtype=str)
-    assert rows == 2 and list(table["Nama Sekolah"]) == ["SMP Benar", "SMP Contoh"]
-    report = pd.read_csv(tmp_path / "school.review.csv")
+    ], columns=["source_file", "row", "column", "new_value", "reason"]).to_csv(cfg["paths"]["overrides"], index=False)
+    status = process_file(path, cfg, replies, cfg["paths"]["standardized"])
+    table = pd.read_csv(cfg["paths"]["standardized"] / "school.csv", dtype=str)
+    assert status["rows"] == 2 and list(table["Nama Sekolah"]) == ["SMP Benar", "SMP Contoh"]
+    report = pd.read_csv(cfg["paths"]["standardized"] / "school.review.csv")
     assert "override matches no row" in set(report["reason"])
+
+
+def test_configuration_is_consistent():
+    cfg = load_config(ROOT / "configs" / "default.yaml")
+    assert cfg["columns"][0] == "No" and cfg["flag_error_share"] == 0.30
+    assert set(cfg["sesi_by_kategori"]) == set(cfg["kategori_by_kelas"])
+    assert all(set(v) <= set(cfg["sesi_valid"]) for v in cfg["sesi_by_kategori"].values())

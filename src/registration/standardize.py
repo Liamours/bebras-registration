@@ -2,12 +2,12 @@ import re
 
 import pandas as pd
 
+from registration.fields import blank, clean_email, clean_name, clean_phone, text, title_case
 from registration.review import Issue
 
 ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10, "xi": 11, "xii": 12}
 META = ["source_file", "source_row"]
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-KODE_BIRO = re.compile(r"^kode_biro_\d+$")
+KODE_BIRO = re.compile(r"^[a-z0-9]+_\d{5}$")  # bureau code, underscore, 5-digit running number
 
 
 def _norm_header(h) -> str:
@@ -15,38 +15,14 @@ def _norm_header(h) -> str:
     return re.sub(r"\s+", " ", h)
 
 
-def _blank(v) -> bool:
-    return v is None or (isinstance(v, float) and pd.isna(v)) or str(v).strip() == ""
-
-
-def _text(v) -> str:
-    if isinstance(v, float) and v.is_integer():
-        return str(int(v))
-    return re.sub(r"\s+", " ", str(v).strip())
-
-
-def _name(v) -> str:
-    s = _text(v)
-    return s.title() if s.isupper() or s.islower() else s
-
-
 def _kelas(v) -> int | None:
-    s = _text(v).lower()
+    s = text(v).lower()
     if s in ROMAN:
         return ROMAN[s]
     m = re.match(r"(\d+)", s) or re.match(r"([ivx]+)\b", s)
     if not m:
         return None
     return int(m.group(1)) if m.group(1).isdigit() else ROMAN.get(m.group(1))
-
-
-def _phone(v) -> str:
-    d = re.sub(r"\D", "", _text(v))
-    if d.startswith("62"):
-        d = "0" + d[2:]
-    elif d.startswith("8"):
-        d = "0" + d
-    return d
 
 
 def rename_headers(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Issue]]:
@@ -58,8 +34,17 @@ def rename_headers(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Issu
     for c in cfg["columns"]:
         if c not in out.columns:
             out[c] = None
-            issues.append(Issue(source, None, c, "", "column missing in file", "error"))
+            issues.append(Issue(source, None, c, "", "column missing in file", "error", "missing_column"))
     return out[cfg["columns"] + META], issues
+
+
+def drop_template_examples(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Issue]]:
+    """Remove the two invented example students that ship with the template."""
+    examples = {n.lower() for n in cfg["template_example_names"]}
+    is_example = df["Nama Lengkap"].map(lambda v: not blank(v) and text(v).lower() in examples)
+    issues = [Issue(r["source_file"], int(r["source_row"]), "Nama Lengkap", text(r["Nama Lengkap"]), "template example row dropped", "warning", "template_example")
+              for _, r in df[is_example].iterrows()]
+    return df[~is_example], issues
 
 
 def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Issue]]:
@@ -74,71 +59,98 @@ def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Is
         file, line = r["source_file"], int(r["source_row"])
         new = {"source_file": file, "source_row": line, "No": r["No"]}
 
-        def flag(col, val, reason, severity):
-            issues.append(Issue(file, line, col, "" if _blank(val) else str(val), reason, severity))
+        def flag(col, val, code, reason, severity="error"):
+            issues.append(Issue(file, line, col, "" if blank(val) else text(val), reason, severity, code))
 
-        for col, text_fn in (("Nama Lengkap", _name), ("Nama Pendamping", _name), ("Kota/Kabupaten", _name), ("Nama Sekolah", _text)):
-            new[col] = nul if _blank(r[col]) else text_fn(r[col])
+        def notes(col, val, found):
+            for code, reason in found:
+                flag(col, val, code, reason, "warning")
+
+        # names
+        for col, student in (("Nama Lengkap", True), ("Nama Pendamping", False)):
+            if blank(r[col]):
+                new[col] = nul
+                flag(col, r[col], "missing_name" if student else "missing_value", "missing", "error" if student else "warning")
+            else:
+                new[col], found = clean_name(r[col], student=student)
+                notes(col, r[col], found)
+                if not new[col]:
+                    new[col] = nul
+                    flag(col, r[col], "missing_name" if student else "missing_value", "missing", "error" if student else "warning")
+
+        # free text
+        for col, fn in (("Nama Sekolah", text), ("Kota/Kabupaten", lambda v: title_case(text(v)) if text(v).isupper() or text(v).islower() else text(v))):
+            new[col] = nul if blank(r[col]) else fn(r[col])
             if new[col] == nul:
-                flag(col, r[col], "missing", "error" if col in ("Nama Lengkap", "Nama Sekolah") else "warning")
+                school = col == "Nama Sekolah"
+                flag(col, r[col], "missing_school" if school else "missing_value", "missing", "error" if school else "warning")
 
+        # NISN
         raw = r["NISN"]
-        if _blank(raw):
+        if blank(raw):
             new["NISN"] = nul
-            flag("NISN", raw, "missing NISN (needs kode_biro)", "error")
+            flag("NISN", raw, "missing_nisn", "missing NISN (needs a bureau code)")
         else:
-            s = _text(raw).replace(" ", "").replace("-", "")
+            s = text(raw).replace(" ", "").replace("-", "")
             if s.isdigit() and len(s) == cfg["nisn_length"] - 1:
                 s = s.zfill(cfg["nisn_length"])
-                flag("NISN", raw, "padded with a leading zero", "warning")
-            elif not KODE_BIRO.match(s) and not (s.isdigit() and len(s) == cfg["nisn_length"]):
-                flag("NISN", raw, f"unexpected NISN format (length {len(s)})", "warning")
-            new["NISN"] = s
+                flag("NISN", raw, "nisn_padded", "padded with a leading zero", "warning")
+            elif not (s.isdigit() and len(s) == cfg["nisn_length"]) and not KODE_BIRO.match(s.lower()):
+                flag("NISN", raw, "nisn_format", f"not 10 digits or a bureau code (length {len(s)})")
+            new["NISN"] = s.lower() if KODE_BIRO.match(s.lower()) else s
 
-        email = "" if _blank(r["Email"]) else _text(r["Email"]).lower()
-        new["Email"] = email or nul
-        if not email:
-            flag("Email", r["Email"], "missing", "warning")
-        elif not EMAIL.match(email):
-            flag("Email", r["Email"], "invalid email", "warning")
+        # email and phone
+        if blank(r["Email"]):
+            new["Email"] = nul
+            flag("Email", r["Email"], "missing_value", "missing", "warning")
+        else:
+            new["Email"], found = clean_email(r["Email"])
+            notes("Email", r["Email"], found)
+        if blank(r["No Kontak Pendamping"]):
+            new["No Kontak Pendamping"] = nul
+            flag("No Kontak Pendamping", r["No Kontak Pendamping"], "missing_value", "missing", "warning")
+        else:
+            phone, found = clean_phone(r["No Kontak Pendamping"])
+            new["No Kontak Pendamping"] = phone or nul
+            notes("No Kontak Pendamping", r["No Kontak Pendamping"], found)
+            if not phone:
+                flag("No Kontak Pendamping", r["No Kontak Pendamping"], "missing_value", "no digits", "warning")
 
+        # value lists
         for col, m in maps.items():
-            if _blank(r[col]):
+            if blank(r[col]):
                 new[col] = nul
                 if col != "Kategori":
-                    flag(col, r[col], "missing", "warning")
+                    flag(col, r[col], "missing_value", "missing", "warning")
                 continue
-            key = _text(r[col]).lower()
-            new[col] = m.get(key, _text(r[col]))
+            key = text(r[col]).lower()
+            new[col] = m.get(key, text(r[col]))
             if key not in m:
-                flag(col, r[col], "value not in the accepted list", "error")
+                flag(col, r[col], "unknown_value", f"'{text(r[col])}' is not an accepted value for {col}")
 
-        kelas = None if _blank(r["Kelas"]) else _kelas(r["Kelas"])
+        # class and category
+        kelas = None if blank(r["Kelas"]) else _kelas(r["Kelas"])
         if kelas is None or not lo <= kelas <= hi:
-            new["Kelas"] = nul if _blank(r["Kelas"]) else _text(r["Kelas"])
-            flag("Kelas", r["Kelas"], "missing or not a class from %d to %d" % (lo, hi), "error")
+            new["Kelas"] = nul if blank(r["Kelas"]) else text(r["Kelas"])
+            flag("Kelas", r["Kelas"], "kelas_invalid", f"missing or not a class from {lo} to {hi}")
         else:
             new["Kelas"] = kelas
             expected = next(n for n, a, b in by_kelas if a <= kelas <= b)
             if new["Kategori"] == nul:
                 new["Kategori"] = expected
-                flag("Kategori", r["Kategori"], f"missing, set to {expected} from Kelas {kelas}", "warning")
+                flag("Kategori", r["Kategori"], "kategori_filled", f"missing, set to {expected} from Kelas {kelas}", "warning")
             elif new["Kategori"] != expected:
-                flag("Kategori", r["Kategori"], f"does not match Kelas {kelas} (expected {expected})", "error")
+                flag("Kategori", r["Kategori"], "kategori_mismatch", f"does not match Kelas {kelas} (expected {expected})")
 
-        sesi = nul if _blank(r["Sesi"]) else _text(r["Sesi"]).upper()
+        # session
+        sesi = nul if blank(r["Sesi"]) else text(r["Sesi"]).upper()
         new["Sesi"] = sesi
         if sesi == nul:
-            flag("Sesi", r["Sesi"], "missing", "warning")
+            flag("Sesi", r["Sesi"], "sesi_missing", "missing", "warning")
         elif sesi not in cfg["sesi_valid"]:
-            flag("Sesi", r["Sesi"], "not a valid session letter", "warning")
-
-        phone = _phone(r["No Kontak Pendamping"]) if not _blank(r["No Kontak Pendamping"]) else ""
-        new["No Kontak Pendamping"] = phone or nul
-        if not phone:
-            flag("No Kontak Pendamping", r["No Kontak Pendamping"], "missing", "warning")
-        elif not 9 <= len(phone) <= 14:
-            flag("No Kontak Pendamping", r["No Kontak Pendamping"], "unexpected phone length", "warning")
+            flag("Sesi", r["Sesi"], "sesi_invalid", f"'{sesi}' is not a session letter")
+        elif new["Kategori"] in cfg["sesi_by_kategori"] and sesi not in cfg["sesi_by_kategori"][new["Kategori"]]:
+            flag("Sesi", r["Sesi"], "sesi_category", f"session {sesi} is not available for {new['Kategori']}")
 
         rows.append(new)
     return pd.DataFrame(rows, columns=cfg["columns"] + META), issues
