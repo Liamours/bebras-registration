@@ -1,14 +1,13 @@
 import argparse
+import os
 from pathlib import Path
 
-import pandas as pd
 import yaml
 from tqdm import tqdm
 
-from registration.overrides import apply_overrides
-from registration.readers import read_workbook
-from registration.review import write_report
-from registration.standardize import normalize_values, rename_headers
+from registration import intake, partition as partition_mod, status
+from registration.pipeline import is_done, process_file
+from registration.replies import load_replies
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -16,41 +15,89 @@ ROOT = Path(__file__).resolve().parents[2]
 def load_config(path: Path) -> dict:
     cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
     cfg["paths"] = {k: (ROOT / v).resolve() for k, v in cfg["paths"].items()}
+    for key in ("target_dir", "state_file"):
+        cfg["intake"][key] = (ROOT / cfg["intake"][key]).resolve()
     return cfg
 
 
-def standardize_file(path: Path, cfg: dict, out_dir: Path) -> tuple[int, int, int]:
-    df = read_workbook(path)
-    df, issues = rename_headers(df, cfg)
-    df, override_issues = apply_overrides(df, cfg["paths"]["overrides"], path.name)
-    table, value_issues = normalize_values(df, cfg)
-    issues = issues + override_issues + value_issues
-    table.to_csv(out_dir / f"{path.stem}.csv", index=False, encoding="utf-8")
-    write_report(issues, out_dir / f"{path.stem}.review.csv")
-    errors = sum(i.severity == "error" for i in issues)
-    return len(table), errors, len(issues) - errors
+def cmd_standardize(args, cfg):
+    out_dir = cfg["paths"]["standardized"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    replies = load_replies(args.replies)
+    files = sorted(args.input.rglob("*.xlsx")) if args.input.is_dir() else [args.input]
+    files = [f for f in files if not f.name.startswith("~$")]
+    counts: dict[str, int] = {}
+    for path in tqdm(files, desc="files", unit="file"):
+        if is_done(out_dir, path) and not args.force:
+            continue
+        row = process_file(path, cfg, replies, out_dir, args.accept_old_template)
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+        tqdm.write(f"{row['source_file']}: {row['status']}, {row['rows']} rows, {row['errors']} errors, {row['warnings']} warnings"
+                   + (f" ({row['reasons']})" if row["reasons"] else ""))
+    print("processed:", counts or "nothing new")
+
+
+def cmd_partition(args, cfg):
+    report = partition_mod.partition(cfg, args.kategori.split(",") if args.kategori else None)
+    print(report["state"].value_counts().to_string() if not report.empty else "no checked files")
+    held = report[report["state"] == "held"]
+    for _, r in held.iterrows():
+        print(f"held: {r['school']} ({r['reason']})")
+
+
+def cmd_status(args, cfg):
+    table = status.school_status(cfg["paths"]["standardized"], cfg["paths"]["submit_ready"], partition_mod.slugify)
+    table.to_csv(cfg["paths"]["standardized"] / "school_status.csv", index=False, encoding="utf-8")
+    print(table["state"].value_counts().to_string() if not table.empty else "no schools yet")
+
+
+def cmd_mark_uploaded(args, cfg):
+    for name in args.files:
+        status.mark_uploaded(cfg["paths"]["submit_ready"], name)
+    print("marked:", ", ".join(args.files))
+
+
+def cmd_intake(args, cfg):
+    url = args.sheet_url or os.environ.get("REGISTRATION_SHEET_URL")
+    if not url:
+        raise SystemExit("give --sheet-url or set REGISTRATION_SHEET_URL")
+    data, _ = intake.http_fetch(intake.sheet_csv_url(url))
+    results = intake.run(cfg, data.decode("utf-8"), fetch=args.fetch)
+    for r in results:
+        print(f"{r['outcome']}: {r['school']} ({r['timestamp']})" + (f" -> {r['saved_as']}" if "saved_as" in r else "") + (f" [{r['error']}]" if "error" in r else ""))
+    if not results:
+        print("nothing new")
+    elif not args.fetch:
+        print("listing only; add --fetch to download")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="registration", description="Standardize registration workbooks.")
-    parser.add_argument("input", type=Path, help="a workbook or a folder of workbooks")
+    parser = argparse.ArgumentParser(prog="registration", description="Registration workbooks: standardize, partition, status, intake.")
     parser.add_argument("--config", type=Path, default=ROOT / "configs" / "default.yaml")
-    parser.add_argument("--force", action="store_true", help="redo files already done (use after changing overrides or config)")
+    parser.add_argument("--replies", type=Path, default=ROOT / "configs" / "replies.yaml")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("standardize", help="check workbooks, write standardized tables, review reports and reply drafts")
+    p.add_argument("input", type=Path, help="a workbook or a folder of workbooks")
+    p.add_argument("--force", action="store_true", help="redo files already done (after changing overrides or configuration)")
+    p.add_argument("--accept-old-template", action="store_true", help="process files without a NISN column (testing on earlier data)")
+    p.set_defaults(func=cmd_standardize)
+
+    p = sub.add_parser("partition", help="write one upload file per school from the checked tables")
+    p.add_argument("--kategori", help="only these categories, comma separated (for example SiKecil,Siaga)")
+    p.set_defaults(func=cmd_partition)
+
+    p = sub.add_parser("status", help="write the per-school status table")
+    p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("mark-uploaded", help="record that upload files went to the website")
+    p.add_argument("files", nargs="+", help="upload file names, for example school-20261105-1200.xlsx")
+    p.set_defaults(func=cmd_mark_uploaded)
+
+    p = sub.add_parser("intake", help="list new submissions from the response sheet; --fetch downloads them")
+    p.add_argument("--sheet-url", help="link of the response sheet (or set REGISTRATION_SHEET_URL)")
+    p.add_argument("--fetch", action="store_true", help="download the new files (default: list only)")
+    p.set_defaults(func=cmd_intake)
+
     args = parser.parse_args()
-
-    cfg = load_config(args.config)
-    out_dir = cfg["paths"]["standardized"]
-    out_dir.mkdir(parents=True, exist_ok=True)
-    files = sorted(args.input.rglob("*.xlsx")) if args.input.is_dir() else [args.input]
-    files = [f for f in files if not f.name.startswith("~$")]
-
-    for path in tqdm(files, desc="files", unit="file"):
-        done = out_dir / f"{path.stem}.csv"
-        if done.exists() and done.stat().st_mtime > path.stat().st_mtime and not args.force:
-            continue
-        try:
-            rows, errors, warnings = standardize_file(path, cfg, out_dir)
-        except ValueError as e:
-            tqdm.write(f"FAILED {e}")
-            continue
-        tqdm.write(f"{path.name}: {rows} rows, {errors} errors, {warnings} warnings")
+    args.func(args, load_config(args.config))
