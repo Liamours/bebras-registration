@@ -6,11 +6,13 @@ Turns the Excel registration files that schools send for Bebras Indonesia Challe
 
 | Stage | Input | Output |
 |---|---|---|
-| Standardize | Registration workbooks as received | One table with fixed column names, fixed value lists, normal-case names and canonical school names |
-| Deduplicate | Standardized table | One row per student (key: NISN) and a report of every duplicate found |
-| Format and partition | Deduplicated table | One upload file per school in the website's template format |
+| Intake | The form's response sheet | New workbooks, a record of the sender |
+| Standardize | Registration workbooks as received | A table with fixed column names and value lists, a review report, a status line, a reply draft for the sender; a workbook that cannot be read reliably is rejected |
+| Deduplicate (planned) | Standardized tables | One row per student (key: NISN) and a report of every duplicate |
+| Partition | Checked tables | One upload file per school in the website's format; schools with open errors are held |
+| Status | Tables and upload files | Per school: held, ready or uploaded |
 
-Details of each stage are in [docs/pipeline.md](docs/pipeline.md). The columns and accepted values of the input template are in [docs/input-template.md](docs/input-template.md).
+Reading order: [docs/operations.md](docs/operations.md) for the daily routine, [docs/pipeline.md](docs/pipeline.md) for what each stage does, [docs/standardization.md](docs/standardization.md) for the rules per field, [docs/input-template.md](docs/input-template.md) for the template, [docs/reply-templates.md](docs/reply-templates.md) for the sender messages.
 
 ## Setup
 
@@ -25,23 +27,28 @@ Run everything through the project environment with `uv run`. Packages are added
 ## Usage
 
 ```bash
-uv run python -m registration <workbook or folder>
+uv run python -m registration standardize <workbook or folder>
+uv run python -m registration partition [--kategori SiKecil,Siaga]
+uv run python -m registration status
+uv run python -m registration mark-uploaded <upload file>...
+uv run python -m registration intake --sheet-url <link> [--fetch]
 uv run python -m pytest
 ```
 
-For each workbook the command writes a standardized table (`<name>.csv`) and a review report (`<name>.review.csv`) to the standardized directory set in `configs/default.yaml`. Finished files are skipped; add `--force` after changing the overrides or the configuration.
+`standardize` writes, per workbook, a table (`<name>.csv`), a review report (`<name>.review.csv`) and, when something needs the sender's attention, a reply draft, plus `status.csv` and `rejected.csv`, all in the standardized directory set in `configs/default.yaml`. Finished files are skipped; add `--force` after changing the overrides or the configuration. `intake` only lists new submissions unless `--fetch` is given.
 
 ## Status
 
-Standardize stage done (reader, header and value normalization, checks, overrides, review report). Next: school names, deduplication, partition.
+Done: intake, standardize (checks, rejection, overrides, review report, reply drafts), partition, status. Planned: canonical school names and regions, deduplication.
 
 ## Layout
 
 ```
-configs/default.yaml     paths, column mapping, accepted values
+configs/default.yaml     paths, column mapping, accepted values, thresholds
+configs/replies.yaml     reply texts (Indonesian)
 src/registration/        the package
 tests/                   tests on invented rows
-docs/                    input template and pipeline notes
+docs/                    routine, pipeline, rules per field, template, reply texts
 ```
 
 All paths, thresholds and value lists live in `configs/default.yaml`. Nothing is hardcoded in the code.
