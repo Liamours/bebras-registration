@@ -36,6 +36,11 @@ def test_file_ids_and_names():
     assert "/" not in intake.file_name({"Content-Disposition": 'attachment; filename="a/b.xlsx"'}, "x")
 
 
+def test_first_column_header_may_be_edited(cfg):
+    results = intake.run(cfg, SHEET.replace("Timestamp,", "ddd,", 1), fetch=False)
+    assert [r["timestamp"] for r in results] == ["01/11/2026 10:00:00", "01/11/2026 11:00:00"]
+
+
 def test_listing_downloads_nothing(cfg):
     results = intake.run(cfg, SHEET, fetch=False, fetcher=lambda url: pytest.fail("must not download"))
     assert [(r["outcome"], r["school"]) for r in results] == [("new", "SMP Contoh"), ("new", "SD Contoh")]    # the row without a link is skipped

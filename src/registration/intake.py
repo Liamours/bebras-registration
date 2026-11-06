@@ -59,6 +59,7 @@ def list_new(sheet: pd.DataFrame, cfg: dict, state: pd.DataFrame) -> pd.DataFram
     """Rows of the response sheet whose file has not been fetched yet."""
     c = cfg["intake"]["columns"]
     rows = sheet.copy()
+    rows.columns = [c["timestamp"], *rows.columns[1:]]  # the first column of a form response sheet is the timestamp, whatever its header says
     rows["file_id"] = rows[c["file_link"]].map(lambda v: file_id(str(v)) if isinstance(v, str) else None)
     rows = rows[rows["file_id"].notna() & ~rows["file_id"].isin(set(state["file_id"]))]
     return rows.reset_index(drop=True)
