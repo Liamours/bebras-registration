@@ -21,6 +21,20 @@ def test_reader_stops_at_instruction_block(make_workbook, row):
     assert len(df) == 2 and list(df["source_row"]) == [2, 3]
 
 
+def test_reader_resumes_at_a_header_repeated_below_the_block(make_workbook, row, cfg):
+    import openpyxl
+
+    path = make_workbook("two_tables.xlsx", [row()])
+    wb = openpyxl.load_workbook(path)
+    ws = wb.active
+    ws.append([])
+    ws.append([c.value for c in ws[1]])
+    ws.append([c.value for c in ws[2]])
+    wb.save(path)
+    df = read_workbook(path)
+    assert len(df) == 2 and list(df["source_row"]) == [2, 8]
+
+
 def test_variants_are_normalized(make_workbook, cfg, row):
     table, issues = run(make_workbook, cfg, [row()])
     r = table.iloc[0]

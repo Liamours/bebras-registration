@@ -22,9 +22,13 @@ def read_workbook(path: Path) -> pd.DataFrame:
         raise ValueError(f"{path.name}: no header row containing 'Nama Lengkap'")
     header = [str(c).strip() if c is not None else "" for c in rows[header_at]]
     records = []
+    in_block = False
     for number, row in enumerate(rows[header_at + 1 :], start=header_at + 2):
         if str(row[0] or "").strip().lower().startswith(BLOCK_MARKER):
-            break
+            in_block = True
+        if in_block:  # a sender may paste the students below the block under a repeated header: resume after it
+            in_block = not any(str(c or "").strip().lower() == HEADER_MARKER for c in row)
+            continue
         if all(c in (None, "") for c in row):
             continue
         record = {h: v for h, v in zip(header, row) if h}
