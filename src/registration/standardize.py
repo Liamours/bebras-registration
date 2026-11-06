@@ -92,6 +92,9 @@ def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Is
             flag("NISN", raw, "missing_nisn", "missing NISN (needs a bureau code)")
         else:
             s = text(raw).replace(" ", "").replace("-", "")
+            if s[:1] in "'’‘`":  # a text-prefix apostrophe typed into the cell, kept as a character by the form upload
+                s = s.lstrip("'’‘`")
+                flag("NISN", raw, "nisn_apostrophe", "leading apostrophe removed", "warning")
             if s.isdigit() and len(s) == cfg["nisn_length"] - 1:
                 s = s.zfill(cfg["nisn_length"])
                 flag("NISN", raw, "nisn_padded", "padded with a leading zero", "warning")

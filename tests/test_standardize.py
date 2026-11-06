@@ -37,6 +37,12 @@ def test_nisn_padded_missing_or_malformed(make_workbook, cfg, row):
     assert [(i.source_row, i.code) for i in issues if i.severity == "warning" and i.column == "NISN"] == [(2, "nisn_padded")]
 
 
+def test_nisn_leading_apostrophe_is_removed(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(NISN="'0100000001")])
+    assert list(table["NISN"]) == ["0100000001"] and not errors(issues)
+    assert [(i.code, i.severity) for i in issues if i.column == "NISN"] == [("nisn_apostrophe", "warning")]
+
+
 def test_kategori_checked_against_kelas(make_workbook, cfg, row):
     table, issues = run(make_workbook, cfg, [row(Kategori="Siaga"), row(Kategori=None)])
     assert table.iloc[1]["Kategori"] == "Penggalang"
