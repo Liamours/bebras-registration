@@ -18,6 +18,7 @@ _DEGREE = r"(?:S\.\s?(?:Pd|Kom|Si|T|E|Ag|H|Hum|Sos|Psi|Kep|Farm)|M\.\s?(?:Pd|Si|
 TRAILING_DEGREES = re.compile(rf"(?:(?:,\s*|\s+){_DEGREE})+\s*$", re.I)
 LEADING_TITLE = re.compile(r"^(?:Dr|Drs|Dra|Ir|Prof)\.?\s+", re.I)
 ROMAN_TOKEN = re.compile(r"^(?:ii|iii|iv|vi|vii|viii|ix)$", re.I)
+NAME_PARTICLES = {"bin", "binti", "bte", "van", "de", "der", "di", "da", "von", "ibn", "al", "el"}  # words that stay in lower case inside a name
 
 
 def blank(value) -> bool:
@@ -65,6 +66,11 @@ def clean_name(value, *, student: bool) -> tuple[str, list[tuple[str, str]]]:
         if "'" in s:  # most Indonesian names use it as a glottal stop (Ma'ruf), a few keep a capital (D'Angelo): a person checks
             notes.append(("name_apostrophe", "capital letters of a name with an apostrophe were converted: the letter after the apostrophe is lower case, check the spelling"))
         s = title_case(s)
+    elif s:  # mixed case is kept as typed, except a word that starts in lower case: it prints on the certificate
+        fixed = " ".join(w if w.lower() in NAME_PARTICLES or not w[:1].islower() else w[:1].upper() + w[1:] for w in s.split(" "))
+        if fixed != s:
+            notes.append(("name_word_case", "a word starting in lower case was capitalized"))
+            s = fixed
     if student and s and len(s.split()) == 1:
         notes.append(("name_single_word", "name has a single word"))
     return s, notes
