@@ -20,7 +20,7 @@ Degrees are removed only when they match a list (`S.Pd`, `S.Kom`, `M.Pd`, ...) w
 | Field | Rule |
 |---|---|
 | Phone | Digits only, `08...` form (`+62`, `62` and a lost leading 0 are repaired). With several numbers the first is kept (`phone_multiple`). A length outside 9 to 14 digits is reported (`phone_length`) |
-| Email | Lower case, spaces and trailing punctuation removed, first address kept when there are several (`email_multiple`). An address that is not valid is reported (`invalid_email`); a likely domain typo such as `gmial.com` is reported (`email_domain_typo`) |
+| Email | Lower case, spaces and trailing punctuation removed, first address kept when there are several (`email_multiple`). An address that is not valid is reported (`invalid_email`): it must match the valid email address of the HTML Standard (section 4.10.5.1.5), be at most 254 characters with a local part of at most 64 (RFC 5321 section 4.5.3.1), and have a dot in the domain; a likely domain typo such as `gmial.com` is reported (`email_domain_typo`) |
 
 ## Identifiers
 

@@ -6,7 +6,9 @@ import re
 
 import pandas as pd
 
-EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# "valid email address" of the HTML Standard (4.10.5.1.5, a willful violation of RFC 5322); lengths from RFC 5321 4.5.3.1: local part 64, whole address 254
+EMAIL = re.compile(r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
+EMAIL_LOCAL_MAX, EMAIL_MAX = 64, 254
 EMAIL_DOMAIN_TYPOS = {
     "gmial.com": "gmail.com", "gmai.com": "gmail.com", "gamil.com": "gmail.com", "gmail.con": "gmail.com",
     "gmail.co": "gmail.com", "gmail.cm": "gmail.com", "yahoo.co": "yahoo.com", "yaho.com": "yahoo.com",
@@ -88,7 +90,7 @@ def clean_email(value) -> tuple[str, list[tuple[str, str]]]:
     if len(parts) > 1:
         notes.append(("email_multiple", "several addresses, the first is kept"))
     s = (parts[0] if parts else "").strip(".,;")
-    if not EMAIL.match(s):
+    if not EMAIL.match(s) or len(s) > EMAIL_MAX or len(s.split("@", 1)[0]) > EMAIL_LOCAL_MAX or "." not in s.split("@", 1)[1]:
         notes.append(("invalid_email", "not a valid email address"))
     elif s.split("@", 1)[1] in EMAIL_DOMAIN_TYPOS:
         notes.append(("email_domain_typo", f"domain may be a typo (did you mean @{EMAIL_DOMAIN_TYPOS[s.split('@', 1)[1]]}?)"))

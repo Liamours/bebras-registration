@@ -48,6 +48,14 @@ def test_phone_with_two_numbers_keeps_the_first_and_short_numbers_are_noted():
     assert clean_phone("-") == ("", [])
 
 
+def test_email_follows_the_html_standard_and_the_rfc_5321_lengths():
+    bad = ["a..b@example.com@", "a@b", "@example.com", "a@-example.com", "a@example-.com", "a@exa_mple.com", "a@example..com",
+           "é@example.com", "a" * 65 + "@example.com", "a@" + "b" * 64 + ".com", "a@" + ".".join(["b" * 60] * 5) + ".com"]
+    good = ["andi.test@example.com", "a+b@example.co.id", "o'brien@example.com", "x@a-b.example.com", "a" * 64 + "@example.com", "sitinur2025@sekolah.sch.id"]
+    assert [e for e in bad if not [c for c, _ in clean_email(e)[1] if c == "invalid_email"]] == []
+    assert [e for e in good if [c for c, _ in clean_email(e)[1] if c == "invalid_email"]] == []
+
+
 def test_email_is_lowercased_and_checked():
     assert clean_email(" Andi.Test@Example.COM ") == ("andi.test@example.com", [])
     assert [c for c, _ in clean_email("andi.example.com")[1]] == ["invalid_email"]
