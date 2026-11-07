@@ -13,6 +13,19 @@ from registration.standardize import drop_template_examples, normalize_values, r
 from registration.status import upsert_status
 
 
+RESERVED_OUTPUTS = {"status.csv", "rejected.csv", "school_status.csv", "students.csv"}  # tables the pipeline keeps in the same folder
+
+
+def output_clashes(names: list[str]) -> list[str]:
+    """Input file names whose output files would overwrite another file's or a status table (Windows ignores the case of a name)."""
+    outputs: dict[str, set[str]] = {}
+    for n in names:
+        stem = Path(n).stem.casefold()
+        for out in (f"{stem}.csv", f"{stem}.review.csv", f"replies/{stem}.txt"):
+            outputs.setdefault(out, set()).add(n)
+    return sorted({n for out, owners in outputs.items() for n in owners if len(owners) > 1 or out in RESERVED_OUTPUTS})
+
+
 def record_result(path: Path, out_dir: Path, replies: dict, *, status: str, rows: int = 0, issues=None, share: float = 0.0,
             rejected=None, school: str = "") -> dict:
     """Write the reply draft, record the status line and return it."""

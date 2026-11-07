@@ -120,11 +120,33 @@ def test_school_status_held_ready_uploaded(make_workbook, cfg, replies, row):
     assert status()["SMP Contoh"] == "ready"                  # a new student is not on the site yet
 
 
-def test_a_school_keeps_its_upload_folder_when_the_slug_is_spelled_differently(tmp_path):
-    from registration.partition import school_folder
+def test_a_second_run_in_the_same_minute_never_overwrites_the_first_file(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001)])
+    assert state(cut(cfg, stamp=STAMP1), "SMP Contoh")["state"] == "written"
+    path = next(cfg["paths"]["submit_ready"].glob("smp_contoh/*.xlsx"))
+    before = path.read_bytes()
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001), row(NISN=3000000002, **{"Nama Lengkap": "Budi Dua"})])
+    again = state(cut(cfg, stamp=STAMP1), "SMP Contoh")
+    assert again["state"] == "held" and "next minute" in again["reason"] and path.read_bytes() == before
+    assert state(cut(cfg, stamp=STAMP2), "SMP Contoh")["rows"] == 1  # the next minute cuts only the new student
 
-    (tmp_path / "smp_mathla_ul_anwar").mkdir()
-    assert school_folder(tmp_path, "smp_mathlaul_anwar").name == "smp_mathla_ul_anwar" and school_folder(tmp_path, "smp_baru").name == "smp_baru"
+
+def test_output_names_that_collide_are_found_ignoring_case_and_reserved_names():
+    from registration.pipeline import output_clashes
+
+    assert output_clashes(["School.xlsx", "school.XLSX", "Other.xlsx"]) == ["School.xlsx", "school.XLSX"]
+    assert output_clashes(["a.xlsx", "a.review.xlsx"]) == ["a.review.xlsx", "a.xlsx"]
+    assert output_clashes(["Students.xlsx", "Status.xlsx", "fine.xlsx"]) == ["Status.xlsx", "Students.xlsx"]
+    assert output_clashes(["one.xlsx", "two.xlsx"]) == []
+
+
+def test_a_folder_with_a_similar_name_holds_the_school_until_a_person_decides(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row()])
+    (cfg["paths"]["submit_ready"] / "smp_con_toh").mkdir()  # the slug of the school is smp_contoh
+    held = state(cut(cfg, stamp=STAMP1), "SMP Contoh")
+    assert held["state"] == "held" and "smp_con_toh" in held["reason"] and not list(cfg["paths"]["submit_ready"].glob("smp_contoh*/*.xlsx"))
+    (cfg["paths"]["submit_ready"] / "smp_contoh").mkdir()  # the person says it is another school
+    assert state(cut(cfg, stamp=STAMP1), "SMP Contoh")["state"] == "written"
 
 
 def test_school_status_from_the_deduplicated_table_agrees_with_partition(tmp_path):
