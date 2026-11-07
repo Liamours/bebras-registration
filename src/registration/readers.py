@@ -7,6 +7,11 @@ HEADER_MARKER = "nama lengkap"
 BLOCK_MARKER = "keterangan"
 
 
+def other_sheets(path: Path) -> list[str]:
+    """Titles of every worksheet after the first, hidden ones included: only the first is read, the others need a person."""
+    return [s.title for s in openpyxl.load_workbook(path, read_only=True).worksheets[1:]]
+
+
 def read_workbook(path: Path) -> pd.DataFrame:
     """Return the student rows of a registration workbook with their source row numbers.
 
