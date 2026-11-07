@@ -124,6 +124,19 @@ def test_a_workbook_with_more_than_one_sheet_is_noted_for_manual_review(make_wor
     assert note.iloc[0]["value"] == "Siswa Tambahan, Cadangan" and "3 sheets" in note.iloc[0]["reason"] and note.iloc[0]["severity"] == "warning"
 
 
+def test_a_student_pasted_below_the_instruction_block_without_a_header_is_noted_not_lost_silently(make_workbook, cfg, replies, row):
+    import openpyxl
+
+    path = make_workbook("school.xlsx", [row(), row()])
+    wb = openpyxl.load_workbook(path)
+    wb.active.append(row(**{"Nama Lengkap": "Pasted Below"}))  # after the block, no repeated header
+    wb.save(path)
+    result = process_file(path, cfg, replies, cfg["paths"]["standardized"])
+    report = pd.read_csv(cfg["paths"]["standardized"] / "school.review.csv")
+    note = report[report["code"] == "skipped_student_row"]
+    assert result["rows"] == 2 and len(note) == 1 and note.iloc[0]["severity"] == "warning"
+
+
 def test_a_workbook_with_one_sheet_has_no_sheet_note(make_workbook, cfg, replies, row):
     process_file(make_workbook("school.xlsx", [row()]), cfg, replies, cfg["paths"]["standardized"])
     assert "extra_sheets" not in set(pd.read_csv(cfg["paths"]["standardized"] / "school.review.csv")["code"].fillna(""))

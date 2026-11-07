@@ -12,6 +12,24 @@ def other_sheets(path: Path) -> list[str]:
     return [s.title for s in openpyxl.load_workbook(path, read_only=True).worksheets[1:]]
 
 
+def skipped_student_rows(path: Path) -> list[int]:
+    """Rows inside the instruction block that look like students (an email address under the Email column) and were therefore not read."""
+    rows = list(openpyxl.load_workbook(path, data_only=True).worksheets[0].iter_rows(values_only=True))
+    header_at = next((i for i, row in enumerate(rows) if any(str(c or "").strip().lower() == HEADER_MARKER for c in row)), None)
+    if header_at is None:
+        return []
+    email_at = next((j for j, c in enumerate(rows[header_at]) if str(c or "").strip().lower() == "email"), None)
+    found, in_block = [], False
+    for number, row in enumerate(rows[header_at + 1 :], start=header_at + 2):
+        if str(row[0] or "").strip().lower().startswith(BLOCK_MARKER):
+            in_block = True
+        if in_block:
+            if email_at is not None and email_at < len(row) and "@" in str(row[email_at] or ""):
+                found.append(number)
+            in_block = not any(str(c or "").strip().lower() == HEADER_MARKER for c in row)
+    return found
+
+
 def read_workbook(path: Path) -> pd.DataFrame:
     """Return the student rows of a registration workbook with their source row numbers.
 
