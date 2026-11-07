@@ -6,8 +6,8 @@
 |---|---|---|---|---|
 | 0 | Intake | `intake` | The submission form's response sheet | New workbooks in the raw directory, a state file, a routing table |
 | 1 | Standardize | `standardize` | Workbooks in the raw directory | `standardized/`: tables, review reports, reply drafts, status tables |
-| 2 | Deduplicate | (planned) | `standardized/` | `deduplicated/` and a duplicate report |
-| 3 | Partition | `partition` | `standardized/` (later `deduplicated/`) | `submit_ready/<school>/` and `partition_report.csv` |
+| 2 | Deduplicate | `dedup` | `standardized/` | `deduplicated/`: `students.csv`, `duplicates.csv`, `assigned_keys.csv` |
+| 3 | Partition | `partition` (runs `dedup` first) | `deduplicated/` | `submit_ready/<school>/` and `partition_report.csv` |
 | 4 | Status | `status`, `mark-uploaded` | Standardized tables, upload files | `school_status.csv`, `uploaded.csv` |
 
 The directories are set in `configs/default.yaml`. Each stage reads the output of the one before and never changes it. Day-to-day use is described in [operations.md](operations.md).
@@ -39,13 +39,13 @@ Rejection is for structure only, because a file with many bad rows usually has o
 
 ## 2. Deduplicate
 
-- Key: NISN, kept as text with leading zeros. A student without a NISN carries `<kode biro>_NNNNN` as the key (bureau code, underscore, 5-digit running number).
-- The same key twice within one school: keep the more complete row and list the other in the report.
-- The same key under two schools: no automatic choice; both rows go to the report for a decision.
-- A second check on normalized name plus school catches one student entered twice under different keys.
-- Every dropped row stays traceable to its source file and row number.
+`dedup` reads every processed table of `standardized/` and writes `students.csv` (one row per student, with `has_error` and a `note`), `duplicates.csv` (the report) and `assigned_keys.csv` (the keys it gave). `partition` runs it first, so the upload files are always cut from a fresh table.
 
-Until this stage exists, `partition` holds every school that has a repeated NISN in the batch.
+- **Key.** NISN, kept as text with leading zeros. A student without a NISN gets `<bureau_code>_NNNNN` (`bureau_code` in the configuration: `telkomuniversity`). The number goes on from the highest one already in the stored keys or in the data. The key given to a row (source file and row) is stored, so a rerun gives the same key and a number is never used twice.
+- **The same key twice in one school.** The row with more filled fields is kept (on a tie the earlier file and row). Both rows are listed in the report, the dropped one marked `no`.
+- **The same key under two schools.** No automatic choice. Every row stays in `students.csv` with `has_error` set, so `partition` holds both schools, and the rows are listed in the report as `same_key_two_schools`. The decision is made with the senders, through the CP, and recorded in `overrides.csv`: a corrected NISN (`row,NISN,<right NISN>,reason`) or `__drop__` for a row that should not exist. After `standardize --force` and `dedup` the rerun gives the same result, because the override is applied again each time.
+- **The same name and school under different keys.** Listed as `same_name_in_school` and kept: it is one student entered twice or two students with one name, and only a person can tell.
+- **Traceability.** Every report line carries the source file and row number.
 
 ## 3. Partition
 

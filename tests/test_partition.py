@@ -1,6 +1,7 @@
 import openpyxl
 import pytest
 
+from registration.dedup import deduplicate
 from registration.partition import partition, slugify, upload_header
 from registration.pipeline import process_file
 from registration.status import mark_uploaded, school_status
@@ -11,6 +12,12 @@ STAMP1, STAMP2 = "20261105-1000", "20261105-1100"
 
 def process(make_workbook, cfg, replies, name, rows):
     process_file(make_workbook(name, rows), cfg, replies, cfg["paths"]["standardized"])
+
+
+def cut(cfg, **kw):
+    """The flow of the command line: deduplicate, then cut the upload files."""
+    deduplicate(cfg)
+    return partition(cfg, **kw)
 
 
 def state(report, school):
@@ -28,7 +35,7 @@ def test_slug():
 
 def test_one_file_per_school_in_the_upload_format(make_workbook, cfg, replies, row):
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=198765432, **{"Nama Lengkap": "Zed Test"}), row(NISN=3000000002, **{"Nama Lengkap": "Amy Test"})])
-    report = partition(cfg, stamp=STAMP1)
+    report = cut(cfg, stamp=STAMP1)
     r = state(report, "SMP Contoh")
     assert (r["state"], r["rows"], r["file"]) == ("written", 2, f"smp_contoh-{STAMP1}.xlsx")
     rows, ws = read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / r["file"])
@@ -41,8 +48,8 @@ def test_one_file_per_school_in_the_upload_format(make_workbook, cfg, replies, r
 
 
 def test_a_school_with_errors_is_held_and_gets_no_file(make_workbook, cfg, replies, row):
-    process(make_workbook, cfg, replies, "b.xlsx", [row(**{"Nama Sekolah": "SMP Dua"}), row(**{"Nama Sekolah": "SMP Dua"}, NISN=None)])
-    report = partition(cfg, stamp=STAMP1)
+    process(make_workbook, cfg, replies, "b.xlsx", [row(**{"Nama Sekolah": "SMP Dua"}), row(**{"Nama Sekolah": "SMP Dua"}, NISN=3000000009, Kelas=99)])
+    report = cut(cfg, stamp=STAMP1)
     r = state(report, "SMP Dua")
     assert r["state"] == "held" and "1 rows with errors" in r["reason"]
     assert not (cfg["paths"]["submit_ready"] / "smp_dua").exists()
@@ -51,10 +58,10 @@ def test_a_school_with_errors_is_held_and_gets_no_file(make_workbook, cfg, repli
 def test_later_students_go_into_a_new_file_and_earlier_files_are_untouched(make_workbook, cfg, replies, row):
     first = [row(NISN=3000000001), row(NISN=3000000002)]
     process(make_workbook, cfg, replies, "a.xlsx", first)
-    partition(cfg, stamp=STAMP1)
-    assert state(partition(cfg, stamp=STAMP2), "SMP Contoh")["state"] == "nothing_new"
+    cut(cfg, stamp=STAMP1)
+    assert state(cut(cfg, stamp=STAMP2), "SMP Contoh")["state"] == "nothing_new"
     process(make_workbook, cfg, replies, "a.xlsx", first + [row(NISN=3000000003)])
-    r = state(partition(cfg, stamp=STAMP2), "SMP Contoh")
+    r = state(cut(cfg, stamp=STAMP2), "SMP Contoh")
     assert (r["state"], r["rows"]) == ("written", 1)
     folder = cfg["paths"]["submit_ready"] / "smp_contoh"
     assert sorted(p.name for p in folder.glob("*.xlsx")) == [f"smp_contoh-{STAMP1}.xlsx", f"smp_contoh-{STAMP2}.xlsx"]
@@ -67,16 +74,16 @@ def test_categories_can_be_uploaded_one_after_another(make_workbook, cfg, replie
         row(NISN=3000000002, Kategori="Siaga", Kelas=5, Sesi="A"),
         row(NISN=3000000003, Kategori="Siaga", Kelas=6, Sesi="A"),
     ])
-    r = state(partition(cfg, kategori=["SiKecil"], stamp=STAMP1), "SMP Contoh")
+    r = state(cut(cfg, kategori=["SiKecil"], stamp=STAMP1), "SMP Contoh")
     assert r["rows"] == 1
-    r = state(partition(cfg, kategori=["Siaga"], stamp=STAMP2), "SMP Contoh")
+    r = state(cut(cfg, kategori=["Siaga"], stamp=STAMP2), "SMP Contoh")
     assert r["rows"] == 2
 
 
 def test_the_same_nisn_in_two_schools_holds_both(make_workbook, cfg, replies, row):
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001, **{"Nama Sekolah": "SMP A"}), row(NISN=3000000002, **{"Nama Sekolah": "SMP A"})])
     process(make_workbook, cfg, replies, "b.xlsx", [row(NISN=3000000001, **{"Nama Sekolah": "SMP B"})])
-    report = partition(cfg, stamp=STAMP1)
+    report = cut(cfg, stamp=STAMP1)
     assert state(report, "SMP A")["state"] == "held" and "repeated NISN" in state(report, "SMP A")["reason"]
     assert state(report, "SMP B")["state"] == "held"
 
@@ -87,7 +94,7 @@ def test_header_follows_the_official_format_file(make_workbook, cfg, replies, ro
     official.save(cfg["paths"]["upload_format"])
     assert upload_header(cfg)[-1] == "Nama Biro "
     process(make_workbook, cfg, replies, "a.xlsx", [row()])
-    partition(cfg, stamp=STAMP1)
+    cut(cfg, stamp=STAMP1)
     rows, _ = read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / f"smp_contoh-{STAMP1}.xlsx")
     assert rows[0][-1] == "Nama Biro " and rows[1][-1] == "Universitas Telkom"
 
@@ -105,7 +112,7 @@ def test_school_status_held_ready_uploaded(make_workbook, cfg, replies, row):
     process(make_workbook, cfg, replies, "b.xlsx", [row(NISN=None, **{"Nama Sekolah": "SMP Dua"})])
     status = lambda: dict(zip(*[school_status(cfg["paths"]["standardized"], cfg["paths"]["submit_ready"], slugify)[c] for c in ("school", "state")]))
     assert status() == {"SMP Contoh": "ready", "SMP Dua": "held"}
-    partition(cfg, stamp=STAMP1)
+    cut(cfg, stamp=STAMP1)
     mark_uploaded(cfg["paths"]["submit_ready"], f"smp_contoh-{STAMP1}.xlsx")
     assert status()["SMP Contoh"] == "uploaded"
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001), row(NISN=3000000002), row(NISN=3000000003)])

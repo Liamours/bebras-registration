@@ -102,7 +102,10 @@ required_any:
 flag_error_share: 0.30
 
 # input of the partition stage: the standardized files, or the deduplicated ones once that stage exists
-partition_input: standardized
+partition_input: deduplicated
+
+# the bureau code of the site's bureau page; a student without a NISN gets <bureau_code>_NNNNN
+bureau_code: telkomuniversity
 
 # intake from the submission form's response sheet; the sheet link is given on the command line, not stored here
 intake:
