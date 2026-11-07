@@ -130,6 +130,13 @@ def test_a_full_sesi_is_left_out_and_its_students_go_up_later_in_a_file_of_their
     assert later["rows"] == 1 and [r[1] for r in read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / later["file"])[0][1:]] == ["Ani Satu"]
 
 
+def test_only_the_named_school_gets_a_file(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001)])
+    process(make_workbook, cfg, replies, "b.xlsx", [row(NISN=3000000002, **{"Nama Sekolah": "SMP Dua"})])
+    report = cut(cfg, stamp=STAMP1, only_schools=["smp_dua"])
+    assert list(report["school"]) == ["SMP Dua"] and not (cfg["paths"]["submit_ready"] / "smp_contoh").exists()
+
+
 def test_a_second_run_in_the_same_minute_never_overwrites_the_first_file(make_workbook, cfg, replies, row):
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001)])
     assert state(cut(cfg, stamp=STAMP1), "SMP Contoh")["state"] == "written"
