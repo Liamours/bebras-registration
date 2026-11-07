@@ -45,8 +45,8 @@ def test_variants_are_normalized(make_workbook, cfg, row):
 
 
 def test_nisn_padded_missing_or_malformed(make_workbook, cfg, row):
-    table, issues = run(make_workbook, cfg, [row(NISN=128384139), row(NISN=None), row(NISN="12345"), row(NISN="abcd_00001")])
-    assert list(table["NISN"]) == ["0128384139", "-", "12345", "abcd_00001"]
+    table, issues = run(make_workbook, cfg, [row(NISN=198765432), row(NISN=None), row(NISN="12345"), row(NISN="abcd_00001")])
+    assert list(table["NISN"]) == ["0198765432", "-", "12345", "abcd_00001"]
     assert errors(issues) == [(3, "missing_nisn"), (4, "nisn_format")]
     assert [(i.source_row, i.code) for i in issues if i.severity == "warning" and i.column == "NISN"] == [(2, "nisn_padded")]
 

@@ -27,7 +27,7 @@ def test_slug():
 
 
 def test_one_file_per_school_in_the_upload_format(make_workbook, cfg, replies, row):
-    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=128384139, **{"Nama Lengkap": "Zed Test"}), row(NISN=3000000002, **{"Nama Lengkap": "Amy Test"})])
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=198765432, **{"Nama Lengkap": "Zed Test"}), row(NISN=3000000002, **{"Nama Lengkap": "Amy Test"})])
     report = partition(cfg, stamp=STAMP1)
     r = state(report, "SMP Contoh")
     assert (r["state"], r["rows"], r["file"]) == ("written", 2, f"smp_contoh-{STAMP1}.xlsx")
@@ -36,7 +36,7 @@ def test_one_file_per_school_in_the_upload_format(make_workbook, cfg, replies, r
     assert [x[CANON.index("Nama Lengkap")] for x in rows[1:]] == ["Amy Test", "Zed Test"]
     assert [x[0] for x in rows[1:]] == [1, 2]                         # numbered again
     nisn_cells = [ws.cell(row=i, column=3) for i in (2, 3)]
-    assert [c.value for c in nisn_cells] == ["3000000002", "0128384139"] and all(c.number_format == "@" for c in nisn_cells)
+    assert [c.value for c in nisn_cells] == ["3000000002", "0198765432"] and all(c.number_format == "@" for c in nisn_cells)
     assert rows[1][CANON.index("Kelas")] == 7 and isinstance(rows[1][CANON.index("Kelas")], int)
 
 
