@@ -15,8 +15,9 @@ ACRONYMS = {"sd", "smp", "sma", "smk", "mi", "ma", "mak", "sdit", "smpit", "smai
 SPECIAL = {"mts": "MTs", "mis": "MIS", "mts.": "MTs"}
 MIN_SUGGESTION = 0.85
 # the ministry's list leaves the city out of a school's name, senders add it at the end: key ending -> the regions it can mean
-CITY_ENDING = {"kotabandung": ("Kota Bandung",), "kabupatenbandungbarat": ("Kabupaten Bandung Barat",), "kabupatenbandung": ("Kabupaten Bandung",),
-               "bandungbarat": ("Kabupaten Bandung Barat",), "bandung": ("Kota Bandung", "Kabupaten Bandung"), "kotacimahi": ("Kota Cimahi",), "cimahi": ("Kota Cimahi",)}
+CITY_ENDING = {"kotabandung": ("Kota Bandung",), "kabupatenbandungbarat": ("Kabupaten Bandung Barat",), "kabbandungbarat": ("Kabupaten Bandung Barat",),
+               "kabupatenbandung": ("Kabupaten Bandung",), "kabbandung": ("Kabupaten Bandung",), "bandungbarat": ("Kabupaten Bandung Barat",),
+               "bandung": ("Kota Bandung", "Kabupaten Bandung"), "kotacimahi": ("Kota Cimahi",), "cimahi": ("Kota Cimahi",)}
 
 
 def slugify(name: str) -> str:
@@ -26,7 +27,10 @@ def slugify(name: str) -> str:
 def canonical(name: str) -> str:
     """Canonical spelling: SMPN 1 becomes SMP Negeri 1, a digit is split from a letter, acronyms are capitals, other words start with a capital."""
     s = re.sub(r"\s+", " ", str(name)).strip()
+    s = re.sub(r"(?i)^(smp|sma|smk|sd|mts|mi|ma)\s+n\.?(?=\s|\d)", lambda m: m.group(1) + "n", s)  # SMP N 1 is SMPN 1
+    s = re.sub(r"(?i)^(smpn|sman|smkn|sdn|mtsn|min|man)\.", lambda m: m.group(1) + " ", s)  # SMPN.1 is SMPN 1
     s = re.sub(r"(?<=\d)(?=[A-Za-z])|(?<=[A-Za-z])(?=\d)", " ", s)
+    s = re.sub(r"\b0+(?=\d)", "", s)  # 01 is 1
     words = s.split(" ")
     if words and words[0].lower() in STATE_PREFIX:
         words[0] = STATE_PREFIX[words[0].lower()]
@@ -102,15 +106,19 @@ def lookup(name: str, master: pd.DataFrame, idx: dict[str, list[int]] | None = N
 
 
 def canonicalize(table: pd.DataFrame, master: pd.DataFrame, null: str = "-") -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The table with canonical school names, a school_slug, and Kota/Kabupaten taken from the region of the matched school.
+    """The table with canonical school names, a school_slug, and Kota/Kabupaten as the region of the school.
 
-    The review lists a school that matches nothing or several schools (with suggestions) and a bare `Bandung` of an unknown school (with both candidates).
+    The region comes from the matched school (a typed city that contradicts it is reported as `region_conflict`), or from the typed city when
+    that names one region. A bare `Bandung` of an unknown school is `region_ambiguous` with both candidates; a school that matches nothing or
+    several schools is `school_unmatched` with its suggestions.
     """
     table = table.copy()
     idx = index(master)
-    review, slugs, suggested, cache = [], [], {}, {}
+    counts: dict[tuple, int] = {}
+    slugs, suggested, cache = [], {}, {}
     for i, row in table.iterrows():
         raw, city = row["Nama Sekolah"], row["Kota/Kabupaten"]
+        typed = regions_of(city)
         if (raw, city) not in cache:
             cache[(raw, city)] = lookup(raw, master, idx, city)
         found, suggestions = cache[(raw, city)]
@@ -119,15 +127,22 @@ def canonicalize(table: pd.DataFrame, master: pd.DataFrame, null: str = "-") -> 
             slugs.append(found["school_slug"])
             if found["region"] in REGIONS:
                 table.at[i, "Kota/Kabupaten"] = found["region"]
+                if typed and found["region"] not in typed:
+                    k = ("region_conflict", found["canonical_name"], f"{city} -> {found['region']}", "-")
+                    counts[k] = counts.get(k, 0) + 1
             continue
         table.at[i, "Nama Sekolah"] = canonical(raw) if raw != null else raw
         suggested[table.at[i, "Nama Sekolah"]] = suggestions
         slugs.append(slugify(table.at[i, "Nama Sekolah"]))
-        if str(city).strip().lower() == "bandung":
-            review.append(["region_ambiguous", raw, city, "Kota Bandung | Kabupaten Bandung", 1])
+        if len(typed) == 1:
+            table.at[i, "Kota/Kabupaten"] = typed[0]
+        elif len(typed) > 1:
+            k = ("region_ambiguous", raw, city, " | ".join(typed))
+            counts[k] = counts.get(k, 0) + 1
     table["school_slug"] = slugs
     for school, group in table[~table["school_slug"].isin(set(master["school_slug"]))].groupby("Nama Sekolah"):
-        review.append(["school_unmatched", school, school, " | ".join(suggested.get(school, [])) or "-", len(group)])
+        counts[("school_unmatched", school, school, " | ".join(suggested.get(school, [])) or "-")] = len(group)
+    review = [[check, school, value, suggestions, n] for (check, school, value, suggestions), n in counts.items()]
     return table, pd.DataFrame(review, columns=REVIEW_COLUMNS)
 
 
@@ -167,12 +182,15 @@ def build_master(portal: pd.DataFrame, seen: pd.DataFrame, hand_aliases: pd.Data
                     idx[key(s["name"])].append(i)
             continue
         name = canonical(s["name"])
+        if re.fullmatch(r"(SD|SMP|SMA|SMK|MI|MTs|MA) Negeri \d+", name):  # no place in the name: it would match every school of that number
+            added.append([s["name"], name, s["jenjang"], s["city"], "not added, the name has no place"])
+            continue
         slug = existing_slugs.get(key(name)) or slugify(name)
         slug = f"{slug}_other" if slug in taken else slug
         taken.add(slug)
         rows.append({"school_slug": slug, "canonical_name": name, "npsn": "", "jenjang": s["jenjang"], "region": "other", "aliases": {s["name"]} - {name}})
         current = frame()
         idx.setdefault(key(name), []).append(len(rows) - 1)
-        added.append([s["name"], name, s["jenjang"], s["city"]])
+        added.append([s["name"], name, s["jenjang"], s["city"], "added with region other"])
     master = frame().sort_values(["region", "canonical_name"]).reset_index(drop=True)
-    return master, pd.DataFrame(added, columns=["seen_name", "canonical_name", "jenjang", "city"])
+    return master, pd.DataFrame(added, columns=["seen_name", "canonical_name", "jenjang", "city", "result"])

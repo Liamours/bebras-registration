@@ -56,7 +56,7 @@ def test_matched_school_gets_canonical_name_slug_and_region():
 
 def test_unknown_school_is_reported_with_suggestions_and_a_bare_bandung_with_both_candidates():
     table, review = schools.canonicalize(students(["SMPN 1 Pacett", "Bandung"], ["SMP Baru", "Cimahi"]), MASTER)
-    assert list(table["Nama Sekolah"]) == ["SMP Negeri 1 Pacett", "SMP Baru"] and list(table["Kota/Kabupaten"]) == ["Bandung", "Cimahi"]  # nothing is guessed
+    assert list(table["Nama Sekolah"]) == ["SMP Negeri 1 Pacett", "SMP Baru"] and list(table["Kota/Kabupaten"]) == ["Bandung", "Kota Cimahi"]  # the school is not guessed; a city that names one region is written in full
     got = {(r["check"], r["school"]): r["suggestions"] for _, r in review.iterrows()}
     assert got[("region_ambiguous", "SMPN 1 Pacett")] == "Kota Bandung | Kabupaten Bandung"
     assert got[("school_unmatched", "SMP Negeri 1 Pacett")] == "SMP Negeri 1 Pacet" and got[("school_unmatched", "SMP Baru")] == "-"
@@ -111,3 +111,32 @@ def test_regions_a_typed_city_can_mean():
     assert schools.regions_of("Kab. Bandung") == ("Kabupaten Bandung",) and schools.regions_of("KAB.BANDUNG BARAT") == ("Kabupaten Bandung Barat",)
     assert schools.regions_of("Bandung") == ("Kota Bandung", "Kabupaten Bandung") and schools.regions_of("Kota Cimahi") == ("Kota Cimahi",)
     assert schools.regions_of("Serang") == () and schools.regions_of("") == ()
+
+
+def test_a_typed_city_that_contradicts_the_matched_school_is_reported():
+    table, review = schools.canonicalize(students(["SMPN 1 Pacet", "Kota Bandung"], ["SMPN 1 Pacet", "Kab. Bandung"]), MASTER)
+    assert list(table["Kota/Kabupaten"]) == ["Kabupaten Bandung", "Kabupaten Bandung"]
+    assert [(r["check"], r["value"], r["rows"]) for _, r in review.iterrows()] == [("region_conflict", "Kota Bandung -> Kabupaten Bandung", 1)]
+
+
+def test_other_spellings_of_the_state_school_prefix_and_numbers():
+    for typed in ["SMP N 1 Pacet", "SMPN.1 Pacet", "SMP NEGERI 01 PACET", "smpn1pacet"]:
+        assert schools.canonical(typed) == "SMP Negeri 1 Pacet", typed
+    assert schools.canonical("SMP Negeri 100 Bandung") == "SMP Negeri 100 Bandung"  # only leading zeros go
+    found, _ = schools.lookup("SMPN 19 Kab. Bandung", SHARED.assign(region=["Kota Bandung", "Kabupaten Bandung", "Kabupaten Bandung", "Kota Cimahi"]))
+    assert found["npsn"] == "30000003"  # the ending `Kab. Bandung` is read as the region Kabupaten Bandung
+
+
+def test_master_does_not_add_a_name_without_a_place():
+    portal = pd.DataFrame([["20200001", "SMP NEGERI 1 PACET", "", "", "NEGERI", "SMP", "Kabupaten Bandung", "Pacet", "2026-11-07"]],
+                          columns=["npsn", "name", "address", "kelurahan", "status", "jenjang", "region", "kecamatan", "fetched"])
+    seen = pd.DataFrame([["SDN 1", "SD", "Bandung"], ["SMA Islam Serang", "SMA", "Serang"]], columns=["name", "jenjang", "city"])
+    master, added = schools.build_master(portal, seen, pd.DataFrame(columns=["alias", "npsn"]), {})
+    assert "SD Negeri 1" not in set(master["canonical_name"])  # it would match every SD Negeri 1
+    assert {r["seen_name"]: r["result"] for _, r in added.iterrows()} == {"SDN 1": "not added, the name has no place", "SMA Islam Serang": "added with region other"}
+
+
+def test_an_alias_that_differs_from_the_canonical_name_matches():
+    master = MASTER.assign(aliases=["Pacet Satu", "", ""])
+    found, _ = schools.lookup("Pacet Satu", master)
+    assert found["npsn"] == "20200001"

@@ -8,9 +8,11 @@ Turns the Excel registration files that schools send for Bebras Indonesia Challe
 |---|---|---|
 | Intake | The form's response sheet | New workbooks, a record of the sender |
 | Standardize | Registration workbooks as received | A table with fixed column names and value lists, a review report, a status line, a reply draft for the sender; a workbook that cannot be read reliably is rejected |
-| Deduplicate (planned) | Standardized tables | One row per student (key: NISN) and a report of every duplicate |
+| School list | The ministry's public school list, earlier workbooks, this year's workbooks | A school master: canonical name, NPSN, jenjang, region and aliases |
+| Deduplicate | Standardized tables, school master | One row per student (key: NISN, or a bureau key for a student without one), canonical school names and regions, a report of every repeated key or name |
 | Partition | Checked tables | One upload file per school in the website's format; schools with open errors are held |
 | Status | Tables and upload files | Per school: held, ready or uploaded |
+| Report | Deduplicated table, status tables | Registration statistics as a table and a summary |
 
 Reading order: [docs/operations.md](docs/operations.md) for the daily routine, [docs/pipeline.md](docs/pipeline.md) for what each stage does, [docs/standardization.md](docs/standardization.md) for the rules per field, [docs/input-template.md](docs/input-template.md) for the template, [docs/reply-templates.md](docs/reply-templates.md) for the sender messages.
 
@@ -39,7 +41,7 @@ uv run python -m pytest
 
 ## Status
 
-Done: intake, standardize (checks, rejection, overrides, review report, reply drafts), partition, status. Planned: canonical school names and regions, deduplication.
+Done: intake, standardize (checks, rejection, overrides, review report, reply drafts), school list and canonical names with regions, deduplication, partition, status, statistics report.
 
 ## Layout
 

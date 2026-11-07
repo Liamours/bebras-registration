@@ -40,7 +40,7 @@ Gender, Kategori, Jenjang Sekolah, Status Pendamping, Bahasa and Nama Biro are m
 
 ## Free text
 
-School name: spaces collapsed, otherwise as typed (canonical names come from the `schools` module). City: normal case when all capitals or all lower case; a name that matches no school or region is reported by the modules that know them.
+School name: spaces collapsed, otherwise as typed; the canonical name and the region come from the school master in the `dedup` stage (see [pipeline.md](pipeline.md)). City: normal case when all capitals or all lower case; a name that matches no school or region is reported by the modules that know them.
 
 ## Template example rows
 
