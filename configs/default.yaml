@@ -54,7 +54,7 @@ value_maps:
   Jenjang Sekolah:
     Preschool: [preschool, paud, tk]
     SD: [sd, sekolah dasar, sekolah dasar(sd)]
-    MI: [mi, mti]
+    MTI: [mti, mi, madrasah ibtidaiyah]  # the site's list is Preschool/SD/MTI/SMP/MTs/SMA/MA/SMK/MAK, it rejects MI
     SMP: [smp]
     MTs: [mts]
     SMA: [sma]
