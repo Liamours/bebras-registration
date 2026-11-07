@@ -7,6 +7,9 @@ paths:
   overrides: ../../data/reference/overrides.csv
   routing: ../../data/reference/cp_routing.csv
   upload_format: ../../data/reference/format_unggah_siswa_2026.xlsx
+  school_source: ../../data/reference/schools_kemendikdasmen.csv
+  school_source_state: ../../data/reference/schools_kemendikdasmen.done
+  school_master: ../../data/reference/school_master.csv
 
 null_value: "-"
 
@@ -124,3 +127,12 @@ intake:
     tenaga kependidikan: school_staff
   target_dir: ../../data/raw/gform
   state_file: ../../data/raw/gform/intake_state.csv
+
+# the public reference pages of the ministry (Pusdatin Kemendikdasmen); codes of the regions and of the school forms in the page addresses
+school_source:
+  base: https://referensi.data.kemendikdasmen.go.id/pendidikan
+  delay_seconds: 0.3
+  regions: {Kota Bandung: "026000", Kabupaten Bandung: "020800", Kabupaten Bandung Barat: "022300", Kota Cimahi: "026700"}
+  forms:
+    dikdas: {SD: 5, SMP: 6, MI: 9, MTs: 10}
+    dikmen: {SMA: 13, SMK: 15, MA: 16, MAK: 17}

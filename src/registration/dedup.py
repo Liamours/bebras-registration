@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from registration.partition import load_checked
+from registration.schools import canonicalize, load_master, slugify
 
 KEY_COLUMNS = ["source_file", "source_row", "key"]
 REPORT_COLUMNS = ["check", "key_or_name", "school", "source_file", "source_row", "kept", "reason"]
@@ -47,6 +48,12 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
     if data.empty:
         return data, pd.DataFrame(columns=REPORT_COLUMNS)
     data["source_row"] = data["source_row"].astype(str)
+    master = load_master(cfg["paths"]["school_master"])
+    if master.empty:
+        data["school_slug"] = data["Nama Sekolah"].map(slugify)
+    else:  # canonical school names, the region of the school as Kota/Kabupaten, and the unmatched schools for review
+        data, school_review = canonicalize(data, master, null)
+        school_review.to_csv(out_dir / "school_review.csv", index=False, encoding="utf-8")
     data = assign_keys(data, out_dir / "assigned_keys.csv", cfg["bureau_code"], null)
     data["school_key"] = data["Nama Sekolah"].map(letters)
     report, drop = [], []

@@ -5,7 +5,9 @@ from pathlib import Path
 import yaml
 from tqdm import tqdm
 
-from registration import dedup, intake, partition as partition_mod, status
+import pandas as pd
+
+from registration import dedup, intake, partition as partition_mod, report as report_mod, schools, school_source, status
 from registration.pipeline import is_done, process_file
 from registration.replies import load_replies
 
@@ -35,6 +37,40 @@ def cmd_standardize(args, cfg):
         tqdm.write(f"{row['source_file']}: {row['status']}, {row['rows']} rows, {row['errors']} errors, {row['warnings']} warnings"
                    + (f" ({row['reasons']})" if row["reasons"] else ""))
     print("processed:", counts or "nothing new")
+
+
+def cmd_school_source(args, cfg):
+    rows = school_source.build(cfg, cfg["paths"]["school_source"], cfg["paths"]["school_source_state"], print)
+    print(f"{rows} school rows written to {cfg['paths']['school_source']}")
+
+
+def cmd_school_master(args, cfg):
+    ref = cfg["paths"]["school_master"].parent
+    portal = pd.read_csv(cfg["paths"]["school_source"], dtype=str).fillna("")
+    seen = pd.read_csv(ref / "schools_2025.csv", dtype=str).fillna("")
+    current = partition_mod.load_checked(cfg["paths"]["standardized"])
+    if not current.empty:  # the schools of this year's files, with the jenjang and city their senders wrote
+        now = current.groupby("Nama Sekolah").agg(jenjang=("Jenjang Sekolah", "first"), city=("Kota/Kabupaten", "first")).reset_index().rename(columns={"Nama Sekolah": "name"})
+        seen = pd.concat([seen, now], ignore_index=True)
+    aliases_path = ref / "school_aliases.csv"
+    hand = pd.read_csv(aliases_path, dtype=str).fillna("") if aliases_path.exists() else pd.DataFrame(columns=["alias", "npsn"])
+    folders = cfg["paths"]["submit_ready"]
+    existing = {p.name.replace("_", ""): p.name for p in folders.iterdir() if p.is_dir()} if folders.exists() else {}
+    master, added = schools.build_master(portal, seen, hand, existing)
+    master.to_csv(cfg["paths"]["school_master"], index=False, encoding="utf-8")
+    added.to_csv(ref / "school_master_added.csv", index=False, encoding="utf-8")
+    print(f"{len(master)} schools in the master; {len(added)} seen in registration files but not in the ministry list (region other):")
+    print(added.to_string(index=False) if len(added) else "none")
+
+
+def cmd_report(args, cfg):
+    out = cfg["paths"]["deduplicated"]
+    students = pd.read_csv(out / "students.csv", dtype=str).fillna("")
+    files = pd.read_csv(cfg["paths"]["standardized"] / "status.csv", dtype=str)
+    part = cfg["paths"]["submit_ready"] / "partition_report.csv"
+    table = report_mod.statistics(students, files, pd.read_csv(part, dtype=str) if part.exists() else pd.DataFrame(columns=["state"]))
+    table.to_csv(out / "statistics.csv", index=False, encoding="utf-8")
+    print(report_mod.summary(table))
 
 
 def cmd_dedup(args, cfg):
@@ -90,6 +126,15 @@ def main() -> None:
     p.add_argument("--force", action="store_true", help="redo files already done (after changing overrides or configuration)")
     p.add_argument("--accept-old-template", action="store_true", help="process files without a NISN column (testing on earlier data)")
     p.set_defaults(func=cmd_standardize)
+
+    p = sub.add_parser("school-source", help="download the schools of the Bandung area from the ministry's reference pages (resumable)")
+    p.set_defaults(func=cmd_school_source)
+
+    p = sub.add_parser("school-master", help="build the school master from the ministry list, the 2025 files and this year's files")
+    p.set_defaults(func=cmd_school_master)
+
+    p = sub.add_parser("report", help="registration statistics from the deduplicated table, written as statistics.csv")
+    p.set_defaults(func=cmd_report)
 
     p = sub.add_parser("dedup", help="one row per student key, keys for students without a NISN, report of repeated keys and names")
     p.set_defaults(func=cmd_dedup)
