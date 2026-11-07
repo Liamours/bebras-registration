@@ -34,7 +34,7 @@ def cmd_standardize(args, cfg):
     if twice or reserved:  # the output tables are named after the file: a repeated or reserved name would overwrite another file's result
         raise SystemExit(f"rename before standardizing: same file name more than once {twice}, names that collide with a status table {reserved}")
     if args.input.is_dir():
-        for other in sorted(p for p in args.input.rglob("*") if p.suffix.lower() in (".xls", ".xlsm", ".csv", ".ods")):
+        for other in sorted(p for p in args.input.rglob("*") if p.suffix.lower() in (".xls", ".xlsm", ".ods")):
             tqdm.write(f"not read, only .xlsx is read: {other.name}")
     counts: dict[str, int] = {}
     for path in tqdm(files, desc="files", unit="file"):
