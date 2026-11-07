@@ -33,7 +33,7 @@ def text(value) -> str:
 
 def title_case(s: str) -> str:
     s = s.title()
-    s = re.sub(r"(?<=[a-z])'S\b", "'s", s)
+    s = re.sub(r"(?<=[a-z])'([A-Z])", lambda m: "'" + m.group(1).lower(), s)  # Ma'ruf, Rifa'i: str.title() would capitalize the letter after the apostrophe
     return " ".join(w.upper() if ROMAN_TOKEN.match(w) else w for w in s.split(" "))
 
 
@@ -62,6 +62,8 @@ def clean_name(value, *, student: bool) -> tuple[str, list[tuple[str, str]]]:
     if re.search(r"\d", s):
         notes.append(("name_digits", "digits in a name"))
     if s and (s.isupper() or s.islower()):
+        if "'" in s:  # most Indonesian names use it as a glottal stop (Ma'ruf), a few keep a capital (D'Angelo): a person checks
+            notes.append(("name_apostrophe", "capital letters of a name with an apostrophe were converted: the letter after the apostrophe is lower case, check the spelling"))
         s = title_case(s)
     if student and s and len(s.split()) == 1:
         notes.append(("name_single_word", "name has a single word"))

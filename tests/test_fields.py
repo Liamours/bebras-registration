@@ -7,13 +7,21 @@ from registration.fields import clean_email, clean_name, clean_phone
     ("ANDI PRATAMA", "Andi Pratama"),
     ("siti nur aisyah", "Siti Nur Aisyah"),
     ("Andi  Pratama ", "Andi Pratama"),                    # mixed case is left as typed, spaces collapsed
-    ("NISA YU'TIKA", "Nisa Yu'Tika"),
+    ("NISA YU'TIKA", "Nisa Yu'tika"),
+    ("BUDI SAN'I SETIA", "Budi San'i Setia"),
+    ("budi's father", "Budi's Father"),
+    ("Nisa Yu'Tika", "Nisa Yu'Tika"),                      # mixed case is left as typed
     ("AHMAD AR-RASYID", "Ahmad Ar-Rasyid"),
     ("budi santoso iii", "Budi Santoso III"),
     ("Ahmad M. Ali", "Ahmad M. Ali"),                      # an initial is not a degree
 ])
 def test_student_name_case(raw, expected):
     assert clean_name(raw, student=True)[0] == expected
+
+
+def test_a_converted_name_with_an_apostrophe_is_noted_for_a_person_to_check():
+    assert [c for c, _ in clean_name("MA'RUF HASAN", student=True)[1]] == ["name_apostrophe"]
+    assert clean_name("Ma'ruf Hasan", student=True)[1] == []
 
 
 def test_student_name_loses_degrees_but_accompanying_person_keeps_them():
