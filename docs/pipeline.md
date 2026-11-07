@@ -6,8 +6,10 @@
 |---|---|---|---|---|
 | 0 | Intake | `intake` | The submission form's response sheet | New workbooks in the raw directory, a state file, a routing table |
 | 1 | Standardize | `standardize` | Workbooks in the raw directory | `standardized/`: tables, review reports, reply drafts, status tables |
+| S | School list | `school-source`, `school-master` | The ministry's reference pages, earlier workbooks, `standardized/` | `reference/schools_kemendikdasmen.csv`, `reference/school_master.csv` |
 | 2 | Deduplicate | `dedup` | `standardized/` | `deduplicated/`: `students.csv`, `duplicates.csv`, `assigned_keys.csv` |
 | 3 | Partition | `partition` (runs `dedup` first) | `deduplicated/` | `submit_ready/<school>/` and `partition_report.csv` |
+| 5 | Report | `report` | `deduplicated/students.csv`, `standardized/status.csv` | `deduplicated/statistics.csv` |
 | 4 | Status | `status`, `mark-uploaded` | Standardized tables, upload files | `school_status.csv`, `uploaded.csv` |
 
 The directories are set in `configs/default.yaml`. Each stage reads the output of the one before and never changes it. Day-to-day use is described in [operations.md](operations.md).
@@ -46,6 +48,17 @@ Rejection is for structure only, because a file with many bad rows usually has o
 - **The same key under two schools.** No automatic choice. Every row stays in `students.csv` with `has_error` set, so `partition` holds both schools, and the rows are listed in the report as `same_key_two_schools`. The decision is made with the senders, through the CP, and recorded in `overrides.csv`: a corrected NISN (`row,NISN,<right NISN>,reason`) or `__drop__` for a row that should not exist. After `standardize --force` and `dedup` the rerun gives the same result, because the override is applied again each time.
 - **The same name and school under different keys.** Listed as `same_name_in_school` and kept: it is one student entered twice or two students with one name, and only a person can tell.
 - **Traceability.** Every report line carries the source file and row number.
+
+## School list
+
+- `school-source` downloads the schools of Kota Bandung, Kabupaten Bandung, Kabupaten Bandung Barat and Kota Cimahi (SD, SMP, MI, MTs, SMA, SMK, MA, MAK) from the public reference pages of the ministry (`referensi.data.kemendikdasmen.go.id`, Pusdatin Kemendikdasmen) into `reference/schools_kemendikdasmen.csv`: NPSN, name, address, kelurahan, status, jenjang, region, kecamatan and the date of the download. The pages state no license, only the copyright line of Pusdatin; the list is kept in the data folder and not published. A rerun skips the pages already done.
+- `school-master` builds `reference/school_master.csv` (school_slug, canonical_name, npsn, jenjang, region, aliases) from that list, `reference/schools_2025.csv` (the schools of the earlier cycle) and the schools of this year's files. A school that is in a file but not in the ministry list is added with the region `other`; the added names are written to `reference/school_master_added.csv` for a look. Spellings seen in files become aliases. `reference/school_aliases.csv` (alias, npsn) holds the aliases decided by hand and is applied on every build. A school that already has an upload folder keeps that folder's slug.
+- Canonical names (`schools.py`): `SMPN 1` becomes `SMP Negeri 1`, a digit is split from a letter, acronyms are capitals, other words start with a capital. Two spellings are the same school when their letters and digits agree, so punctuation and case do not matter.
+- `dedup` applies the master to every student: the canonical school name, the `school_slug`, and Kota/Kabupaten taken from the region of the school when the region is one of the four above. A school that matches nothing keeps its canonical spelling, and `deduplicated/school_review.csv` lists it with up to three close names. A close name is a suggestion and is never picked. A bare `Bandung` of an unknown school is listed with both candidates, Kota Bandung and Kabupaten Bandung.
+
+## Report
+
+`report` writes `deduplicated/statistics.csv` (metric, group, value) and prints a summary: schools and students, students per jenjang, kategori, region and Sesi, files received, flagged and rejected, and schools held.
 
 ## 3. Partition
 

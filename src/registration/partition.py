@@ -7,12 +7,10 @@ import openpyxl
 import pandas as pd
 from openpyxl.styles import PatternFill
 
+from registration.schools import slugify
+
 TEXT_COLUMNS = ("NISN", "No Kontak Pendamping")
 REPORT_COLUMNS = ["school", "slug", "state", "rows", "file", "reason"]
-
-
-def slugify(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "unknown"
 
 
 def upload_header(cfg: dict) -> list[str]:
@@ -91,8 +89,10 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
         return pd.DataFrame(columns=REPORT_COLUMNS)
     header = upload_header(cfg)
     repeated = set(data[data.duplicated("NISN", keep=False)]["NISN"])
-    for school, group in data.groupby("Nama Sekolah", sort=True):
-        slug = slugify(school)
+    if "school_slug" not in data.columns:
+        data["school_slug"] = data["Nama Sekolah"].map(slugify)
+    for slug, group in data.groupby("school_slug", sort=True):  # the slug comes from the school master, so an upload folder is never renamed
+        school = group["Nama Sekolah"].iloc[0]
         folder = out_dir / slug
         if school == null:
             report.append([school, slug, "held", len(group), "", "school name missing"])
