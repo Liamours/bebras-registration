@@ -57,3 +57,34 @@ def test_the_same_name_and_school_under_different_keys_is_listed_but_kept(make_w
     students, report = deduplicate(cfg)
     assert len(students) == 2 and not students["has_error"].any()
     assert list(report["check"]) == ["same_name_in_school"] * 2
+
+
+def test_a_nisn_with_a_leading_zero_stays_text_through_the_deduplicated_table(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN="0123456789")])
+    students, _ = deduplicate(cfg)
+    assert list(students["NISN"]) == ["0123456789"]
+    assert pd.read_csv(cfg["paths"]["deduplicated"] / "students.csv", dtype=str).iloc[0]["NISN"] == "0123456789"
+
+
+def test_two_students_without_a_name_are_not_reported_as_one_student(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001, **{"Nama Lengkap": None}), row(NISN=3000000002, **{"Nama Lengkap": None})])
+    _, report = deduplicate(cfg)
+    assert report.empty  # both rows are errors already, a shared empty name says nothing
+
+
+def test_the_school_review_follows_the_master_and_an_old_one_is_removed(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(**{"Nama Sekolah": "SMP Tidak Dikenal", "Kota/Kabupaten": "Bandung"})])
+    pd.DataFrame([["smp_negeri_1_pacet", "SMP Negeri 1 Pacet", "20200001", "SMP", "Kabupaten Bandung", ""]],
+                 columns=["school_slug", "canonical_name", "npsn", "jenjang", "region", "aliases"]).to_csv(cfg["paths"]["school_master"], index=False)
+    deduplicate(cfg)
+    review = pd.read_csv(cfg["paths"]["deduplicated"] / "school_review.csv", dtype=str)
+    assert {"school_unmatched", "region_ambiguous"} == set(review["check"])
+    cfg["paths"]["school_master"].unlink()
+    deduplicate(cfg)
+    assert not (cfg["paths"]["deduplicated"] / "school_review.csv").exists()
+
+
+def test_assigned_keys_live_in_the_reference_state_file(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None)])
+    deduplicate(cfg)
+    assert cfg["paths"]["assigned_keys"].exists() and "telkomuniversity_00001" in cfg["paths"]["assigned_keys"].read_text(encoding="utf-8")

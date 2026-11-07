@@ -8,7 +8,7 @@ The routine while registration is open. Every command runs from the repository f
 2. **Standardize.** `standardize <raw directory>` checks every workbook that is new or changed. Each file prints one line: status, rows, errors, warnings.
 3. **Read the reports.** See "Reading the output".
 4. **Resolve.** For each problem choose one of three ways (below), then run `standardize` again.
-5. **Deduplicate and partition.** `dedup` writes the report of repeated keys and gives a key to a student without a NISN; read `duplicates.csv` and settle each `same_key_two_schools` line with the senders. When a school has no error left, `partition` (which runs `dedup` first) writes its upload file.
+5. **Deduplicate and partition.** `dedup` writes the report of repeated keys and gives a key to a student without a NISN; read `duplicates.csv` and settle each `same_key_two_schools` line with the senders, and read `school_review.csv`: a school that matches nothing gets a line (with close names, never applied), and a typed city that contradicts the school's region is reported. When a school has no error left, `partition` (which runs `dedup` first) writes its upload file.
 6. **Upload.** Upload the files of `submit_ready/<school>/` to the registration website, then record them with `mark-uploaded`.
 7. **Status.** `status` writes `school_status.csv` so that it is clear which school is held, ready or uploaded.
 

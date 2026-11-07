@@ -65,12 +65,15 @@ def cmd_school_master(args, cfg):
 
 def cmd_report(args, cfg):
     out = cfg["paths"]["deduplicated"]
+    status_path = cfg["paths"]["standardized"] / "status.csv"
+    if not (out / "students.csv").exists() or not status_path.exists():
+        raise SystemExit("nothing to report yet: run standardize and dedup first")
     students = pd.read_csv(out / "students.csv", dtype=str).fillna("")
-    files = pd.read_csv(cfg["paths"]["standardized"] / "status.csv", dtype=str)
-    part = cfg["paths"]["submit_ready"] / "partition_report.csv"
-    table = report_mod.statistics(students, files, pd.read_csv(part, dtype=str) if part.exists() else pd.DataFrame(columns=["state"]))
+    table = report_mod.statistics(students, pd.read_csv(status_path, dtype=str))
     table.to_csv(out / "statistics.csv", index=False, encoding="utf-8")
-    print(report_mod.summary(table))
+    text = report_mod.summary(table)
+    (out / "statistics.txt").write_text(text + chr(10), encoding="utf-8")
+    print(text)
 
 
 def cmd_dedup(args, cfg):

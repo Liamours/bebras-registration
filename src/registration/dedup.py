@@ -49,12 +49,14 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
         return data, pd.DataFrame(columns=REPORT_COLUMNS)
     data["source_row"] = data["source_row"].astype(str)
     master = load_master(cfg["paths"]["school_master"])
+    review_path = out_dir / "school_review.csv"
     if master.empty:
+        review_path.unlink(missing_ok=True)  # an old review must not outlive the master it came from
         data["school_slug"] = data["Nama Sekolah"].map(slugify)
     else:  # canonical school names, the region of the school as Kota/Kabupaten, and the unmatched schools for review
         data, school_review = canonicalize(data, master, null)
-        school_review.to_csv(out_dir / "school_review.csv", index=False, encoding="utf-8")
-    data = assign_keys(data, out_dir / "assigned_keys.csv", cfg["bureau_code"], null)
+        school_review.to_csv(review_path, index=False, encoding="utf-8")
+    data = assign_keys(data, cfg["paths"]["assigned_keys"], cfg["bureau_code"], null)
     data["school_key"] = data["Nama Sekolah"].map(letters)
     report, drop = [], []
 
@@ -78,8 +80,8 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
                 drop.append(i)
     data = data.drop(index=drop)
     data["name_key"] = data["Nama Lengkap"].map(letters)
-    for (_, _), group in data.groupby(["name_key", "school_key"], sort=True):
-        if group["NISN"].nunique() > 1:  # one student entered twice under different keys, or two students with one name
+    for (name_key, _), group in data.groupby(["name_key", "school_key"], sort=True):
+        if name_key and group["NISN"].nunique() > 1:  # a row without a name is already an error of its own  # one student entered twice under different keys, or two students with one name
             for _, row in group.iterrows():
                 line("same_name_in_school", row["Nama Lengkap"], row, "yes", "same name and school under different keys, check by hand")
     students = data.drop(columns=["school_key", "name_key"]).reset_index(drop=True)

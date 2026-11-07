@@ -10,6 +10,7 @@ paths:
   school_source: ../../data/reference/schools_kemendikdasmen.csv
   school_source_state: ../../data/reference/schools_kemendikdasmen.done
   school_master: ../../data/reference/school_master.csv
+  assigned_keys: ../../data/reference/assigned_keys.csv
 
 null_value: "-"
 
