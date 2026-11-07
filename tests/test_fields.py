@@ -11,6 +11,8 @@ from registration.fields import clean_email, clean_name, clean_phone
     ("BUDI SAN'I SETIA", "Budi San'i Setia"),
     ("budi's father", "Budi's Father"),
     ("Nisa Yu'Tika", "Nisa Yu'Tika"),                      # mixed case is left as typed
+    ("Budi santoso Wijaya", "Budi Santoso Wijaya"),        # a word starting in lower case is capitalized
+    ("Siti binti Ahmad", "Siti binti Ahmad"),              # a particle stays
     ("AHMAD AR-RASYID", "Ahmad Ar-Rasyid"),
     ("budi santoso iii", "Budi Santoso III"),
     ("Ahmad M. Ali", "Ahmad M. Ali"),                      # an initial is not a degree
