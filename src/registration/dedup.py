@@ -83,6 +83,7 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
     data = assign_keys(data, cfg["paths"]["assigned_keys"], cfg["bureau_code"], null)
     data.loc[data["school_ambiguous"], ["has_error", "note"]] = [True, "the school name matches several schools, decide which one"]
     data["school_key"] = data["Nama Sekolah"].map(letters)
+    data["name_key"] = data["Nama Lengkap"].map(letters)
     report, drop = [], []
 
     def line(check, key, row, kept, reason):
@@ -97,6 +98,12 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
                 data.at[i, "note"] = "the same NISN is under another school"
                 line("same_key_two_schools", key, row, "held", "decide with the senders; fix a NISN or drop a row in overrides.csv")
             continue
+        if group["name_key"].nunique() > 1:  # a NISN belongs to one student: one of the NISN values is wrong, only the sender knows which
+            for i, row in group.iterrows():
+                data.at[i, "has_error"] = True
+                data.at[i, "note"] = "the same NISN is under different names"
+                line("same_key_different_names", key, row, "held", "a NISN belongs to one student: ask the sender which NISN is right, then fix it in overrides.csv")
+            continue
         order = sorted(group.index, key=lambda i: (bool(group.at[i, "has_error"]), -fullness(group.loc[i], null), str(group.at[i, "source_file"]), int(group.at[i, "source_row"])))
         for n, i in enumerate(order):
             keep = n == 0
@@ -104,7 +111,6 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
             if not keep:
                 drop.append(i)
     data = data.drop(index=drop)
-    data["name_key"] = data["Nama Lengkap"].map(letters)
     for (name_key, _), group in data.groupby(["name_key", "school_key"], sort=True):
         if name_key and group["NISN"].nunique() > 1:  # a row without a name is already an error of its own  # one student entered twice under different keys, or two students with one name
             for _, row in group.iterrows():
