@@ -51,6 +51,12 @@ def test_nisn_padded_missing_or_malformed(make_workbook, cfg, row):
     assert [(i.source_row, i.code) for i in issues if i.severity == "warning" and i.column == "NISN"] == [(2, "nisn_padded")]
 
 
+def test_empty_bureau_column_is_filled_with_our_bureau(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(**{"Nama Biro": None})])
+    assert table.iloc[0]["Nama Biro"] == "Universitas Telkom" and not errors(issues)
+    assert [(i.code, i.severity) for i in issues if i.column == "Nama Biro"] == [("default_filled", "warning")]
+
+
 def test_nisn_leading_apostrophe_is_removed(make_workbook, cfg, row):
     table, issues = run(make_workbook, cfg, [row(NISN="'0100000001")])
     assert list(table["NISN"]) == ["0100000001"] and not errors(issues)

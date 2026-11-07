@@ -121,6 +121,10 @@ def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Is
 
         # value lists
         for col, m in maps.items():
+            if blank(r[col]) and col in cfg["defaults"]:  # the bureau is the one uploading, so an empty bureau column is ours
+                new[col] = cfg["defaults"][col]
+                flag(col, r[col], "default_filled", f"empty, filled with {new[col]}", "warning")
+                continue
             if blank(r[col]):
                 new[col] = nul
                 if col != "Kategori":
