@@ -55,13 +55,11 @@ def earlier_nisns(folder: Path) -> set[str]:
     return found
 
 
-def school_folder(out_dir: Path, slug: str) -> Path:
-    """The existing upload folder of a school (compared without underscores), else the folder of its slug."""
-    if out_dir.exists():
-        for p in out_dir.iterdir():
-            if p.is_dir() and p.name.replace("_", "") == slug.replace("_", ""):
-                return p
-    return out_dir / slug
+def similar_folders(out_dir: Path, slug: str) -> list[str]:
+    """Upload folders named like the slug apart from the underscores: the same school spelled differently, or another school."""
+    if not out_dir.exists() or (out_dir / slug).exists():
+        return []
+    return sorted(p.name for p in out_dir.iterdir() if p.is_dir() and p.name.replace("_", "") == slug.replace("_", ""))
 
 
 def load_checked(input_dir: Path, ignore_codes: set[str] = frozenset()) -> pd.DataFrame:
@@ -102,9 +100,13 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
         data["school_slug"] = data["Nama Sekolah"].map(slugify)
     for slug, group in data.groupby("school_slug", sort=True):  # the slug comes from the school master, so an upload folder is never renamed
         school = group["Nama Sekolah"].iloc[0]
-        folder = school_folder(out_dir, slug)
+        folder = out_dir / slug
         if school == null:
             report.append([school, slug, "held", len(group), "", "school name missing"])
+            continue
+        similar = similar_folders(out_dir, slug)
+        if similar:  # never merged by guess: the earlier uploads of this school would be missed, or two schools would share a folder
+            report.append([school, slug, "held", len(group), "", f"folder {', '.join(similar)} exists with a similar name: rename it to {slug} if it is the same school, or create an empty folder {slug} if it is another school"])
             continue
         n_bad = int(group["has_error"].sum())
         n_dup = int(group["NISN"].isin(repeated).sum())
@@ -121,6 +123,9 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
             report.append([school, slug, "nothing_new", 0, "", "no student without an earlier upload file"])
             continue
         path = folder / f"{folder.name}-{stamp}.xlsx"
+        if path.exists():  # a second run in the same minute would overwrite the first file, whose students it leaves out as already cut
+            report.append([school, slug, "held", len(rows), "", f"{path.name} exists: run again in the next minute"])
+            continue
         write_upload(path, rows, header, null)
         report.append([school, slug, "written", len(rows), path.name, ""])
     out = pd.DataFrame(report, columns=REPORT_COLUMNS)

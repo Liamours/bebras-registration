@@ -8,7 +8,7 @@ from tqdm import tqdm
 import pandas as pd
 
 from registration import dedup, intake, partition as partition_mod, report as report_mod, schools, school_source, status
-from registration.pipeline import is_done, process_file
+from registration.pipeline import is_done, output_clashes, process_file
 from registration.replies import load_replies
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,11 +28,9 @@ def cmd_standardize(args, cfg):
     replies = load_replies(args.replies)
     files = sorted(args.input.rglob("*.xlsx")) if args.input.is_dir() else [args.input]
     files = [f for f in files if not f.name.startswith("~$")]
-    names = [f.name for f in files]
-    twice = sorted({n for n in names if names.count(n) > 1})
-    reserved = sorted({f.name for f in files if f.stem in ("status", "rejected", "school_status")})
-    if twice or reserved:  # the output tables are named after the file: a repeated or reserved name would overwrite another file's result
-        raise SystemExit(f"rename before standardizing: same file name more than once {twice}, names that collide with a status table {reserved}")
+    clashes = output_clashes([f.name for f in files])
+    if clashes:  # the output tables are named after the file: a repeated, case-only different or reserved name would overwrite another file's result
+        raise SystemExit(f"rename before standardizing: these file names give the same output file as another file or as a status table {clashes}")
     if args.input.is_dir():
         for other in sorted(p for p in args.input.rglob("*") if p.suffix.lower() in (".xls", ".xlsm", ".ods")):
             tqdm.write(f"not read, only .xlsx is read: {other.name}")
