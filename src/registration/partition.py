@@ -57,8 +57,12 @@ def earlier_nisns(folder: Path) -> set[str]:
     return found
 
 
-def load_checked(input_dir: Path) -> pd.DataFrame:
-    """Every processed student row with a flag for rows that still have an error."""
+def load_checked(input_dir: Path, ignore_codes: set[str] = frozenset()) -> pd.DataFrame:
+    """Every processed student row with a flag for rows that still have an error; the deduplicated folder holds one ready table."""
+    if (input_dir / "students.csv").exists():
+        table = pd.read_csv(input_dir / "students.csv", dtype=str).fillna("")
+        table["has_error"] = table["has_error"] == "True"
+        return table
     status_path = input_dir / "status.csv"
     if not status_path.exists():
         return pd.DataFrame()
@@ -69,7 +73,7 @@ def load_checked(input_dir: Path) -> pd.DataFrame:
         stem = Path(f["source_file"]).stem
         table = pd.read_csv(input_dir / f"{stem}.csv", dtype=str)
         review = pd.read_csv(input_dir / f"{stem}.review.csv", dtype=str)
-        bad = set(review[review["severity"] == "error"]["source_row"].dropna())
+        bad = set(review[(review["severity"] == "error") & ~review["code"].isin(ignore_codes)]["source_row"].dropna())
         table["has_error"] = table["source_row"].isin(bad)
         parts.append(table)
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()

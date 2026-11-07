@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from tqdm import tqdm
 
-from registration import intake, partition as partition_mod, status
+from registration import dedup, intake, partition as partition_mod, status
 from registration.pipeline import is_done, process_file
 from registration.replies import load_replies
 
@@ -37,7 +37,15 @@ def cmd_standardize(args, cfg):
     print("processed:", counts or "nothing new")
 
 
+def cmd_dedup(args, cfg):
+    students, duplicates = dedup.deduplicate(cfg)
+    print(f"{len(students)} students kept")
+    if not duplicates.empty:
+        print(duplicates.groupby(["check", "kept"]).size().to_string())
+
+
 def cmd_partition(args, cfg):
+    dedup.deduplicate(cfg)  # the upload files are always cut from a fresh deduplicated table
     report = partition_mod.partition(cfg, args.kategori.split(",") if args.kategori else None)
     print(report["state"].value_counts().to_string() if not report.empty else "no checked files")
     held = report[report["state"] == "held"]
@@ -82,6 +90,9 @@ def main() -> None:
     p.add_argument("--force", action="store_true", help="redo files already done (after changing overrides or configuration)")
     p.add_argument("--accept-old-template", action="store_true", help="process files without a NISN column (testing on earlier data)")
     p.set_defaults(func=cmd_standardize)
+
+    p = sub.add_parser("dedup", help="one row per student key, keys for students without a NISN, report of repeated keys and names")
+    p.set_defaults(func=cmd_dedup)
 
     p = sub.add_parser("partition", help="write one upload file per school from the checked tables")
     p.add_argument("--kategori", help="only these categories, comma separated (for example SiKecil,Siaga)")

@@ -21,5 +21,6 @@ def apply_overrides(df: pd.DataFrame, path: Path, source_file: str) -> tuple[pd.
         elif o["new_value"] == DROP:
             df = df[~mask]
         else:
+            df[o["column"]] = df[o["column"]].astype(object)  # a column read as numbers must accept text such as a NISN with a leading zero
             df.loc[mask, o["column"]] = o["new_value"]
     return df, issues
