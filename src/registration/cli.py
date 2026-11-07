@@ -92,7 +92,8 @@ def cmd_dedup(args, cfg):
 def cmd_partition(args, cfg):
     dedup.deduplicate(cfg)  # the upload files are always cut from a fresh deduplicated table
     report = partition_mod.partition(cfg, args.kategori.split(",") if args.kategori else None, exclude_sesi=args.exclude_sesi.split(",") if args.exclude_sesi else None,
-                                      only_schools=args.school.split(",") if args.school else None)
+                                      only_schools=args.school.split(",") if args.school else None,
+                                      resend_sesi=args.resend_sesi.split(",") if args.resend_sesi else None)
     print(report["state"].value_counts().to_string() if not report.empty else "no checked files")
     held = report[report["state"] == "held"]
     for _, r in held.iterrows():
@@ -153,6 +154,7 @@ def main() -> None:
 
     p = sub.add_parser("partition", help="write one upload file per school from the checked tables")
     p.add_argument("--kategori", help="only these categories, comma separated (for example SiKecil,Siaga)")
+    p.add_argument("--resend-sesi", help="include the students of these Sesi again although an earlier file holds them (after their Sesi was changed and the old accounts were deleted on the site)")
     p.add_argument("--school", help="only these school slugs, comma separated (for example smp_contoh)")
     p.add_argument("--exclude-sesi", help="leave the students of these Sesi out, comma separated (for example B1); they go up later in a file of their own")
     p.set_defaults(func=cmd_partition)
