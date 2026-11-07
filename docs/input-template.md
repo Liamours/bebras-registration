@@ -17,7 +17,7 @@ Header names vary between files (case, spacing, typos, a missing column). Header
 | Kategori | `SiKecil`, `Siaga`, `Penggalang`, `Penegak` |
 | Gender | `Laki-laki`, `Perempuan` |
 | Kelas | Integer 0 to 12 |
-| Jenjang Sekolah | `Preschool`, `SD`, `MI`, `SMP`, `MTs`, `SMA`, `MA`, `SMK`, `MAK` |
+| Jenjang Sekolah | `Preschool`, `SD`, `MTI`, `SMP`, `MTs`, `SMA`, `MA`, `SMK`, `MAK` |
 | Status Pendamping | `Guru`, `Orang Tua`, `Wali` |
 | Bahasa | `Indonesia`, `Inggris` |
 | Sesi | Time slot, see below |

@@ -69,6 +69,11 @@ def test_kategori_checked_against_kelas(make_workbook, cfg, row):
     assert [(i.source_row, i.code, i.severity) for i in issues if i.column == "Kategori"] == [(2, "kategori_mismatch", "error"), (3, "kategori_filled", "warning")]
 
 
+def test_jenjang_follows_the_sites_list_where_the_madrasah_level_is_mti(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(**{"Jenjang Sekolah": "MTI", "Kelas": 3, "Kategori": "SiKecil", "Sesi": "b"}), row(**{"Jenjang Sekolah": "MI", "Kelas": 3, "Kategori": "SiKecil", "Sesi": "b"})])
+    assert list(table["Jenjang Sekolah"]) == ["MTI", "MTI"] and not [i for i in issues if i.severity == "error" and i.column == "Jenjang Sekolah"]
+
+
 def test_a_session_label_copied_with_its_time_is_read_as_the_letter_with_a_warning(make_workbook, cfg, row):
     table, issues = run(make_workbook, cfg, [row(Sesi="B1 (08.15 - 09.30)"), row(Sesi="b")])
     assert list(table["Sesi"]) == ["B1", "B"]
