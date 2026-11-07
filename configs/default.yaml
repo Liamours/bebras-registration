@@ -67,6 +67,10 @@ value_maps:
   Nama Biro:
     Universitas Telkom: [universitas telkom, telkom university, universitas telkom bandung, univesity telkom, telkom univ, tel-u]
 
+# value written when the sender left the column empty
+defaults:
+  Nama Biro: Universitas Telkom
+
 kelas_range: [0, 12]
 
 # Kelas -> Kategori
