@@ -15,6 +15,7 @@ import pandas as pd
 from registration.partition import slugify
 
 DOWNLOAD_URL = "https://drive.usercontent.google.com/download?id={id}&export=download"
+EXPORT_URL = "https://docs.google.com/spreadsheets/d/{id}/export?format=xlsx"
 STATE_COLUMNS = ["file_id", "timestamp", "saved_as", "fetched_at"]
 ROUTING_COLUMNS = ["cp_name", "cp_phone", "submitter_name", "submitter_phone", "submitter_role", "school_slug", "received_date", "source_file", "notes"]
 MAX_BYTES = 25 * 1024 * 1024
@@ -90,7 +91,12 @@ def run(cfg: dict, sheet_csv: str, *, fetch: bool = False, fetcher: Fetcher = ht
         result = {"file_id": r["file_id"], "school": r[c["school"]], "timestamp": r[c["timestamp"]], "outcome": "new"}
         if fetch:
             try:
-                data, headers = fetcher(DOWNLOAD_URL.format(id=r["file_id"]))
+                try:
+                    data, headers = fetcher(DOWNLOAD_URL.format(id=r["file_id"]))
+                except Exception:  # a sheet made in Google Sheets is no file to download: it is exported as xlsx
+                    data, headers = fetcher(EXPORT_URL.format(id=r["file_id"]))
+                if data[:2] != b"PK":
+                    data, headers = fetcher(EXPORT_URL.format(id=r["file_id"]))
                 if len(data) >= MAX_BYTES:
                     raise ValueError("file larger than the size limit")
                 if data[:2] != b"PK":

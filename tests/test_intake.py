@@ -75,3 +75,16 @@ def test_an_existing_file_is_never_overwritten(cfg):
     intake.run(cfg, SHEET, fetch=True, fetcher=fake_fetch)
     assert (cfg["intake"]["target_dir"] / "School A.xlsx").read_bytes() == b"older file"
     assert (cfg["intake"]["target_dir"] / "School A-AAA111.xlsx").read_bytes() == XLSX
+
+
+def test_a_google_sheet_is_exported_when_it_cannot_be_downloaded(cfg):
+    calls = []
+
+    def fetch(url):
+        calls.append(url)
+        if "export?format=xlsx" in url:
+            return XLSX, {}
+        raise OSError("HTTP Error 404: Not Found")  # a native Google Sheet has no file to download
+
+    results = intake.run(cfg, SHEET, fetch=True, fetcher=fetch)
+    assert [r["outcome"] for r in results] == ["fetched", "fetched"] and any("export?format=xlsx" in c for c in calls)

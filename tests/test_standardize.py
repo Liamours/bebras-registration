@@ -136,3 +136,9 @@ def test_a_file_is_redone_after_the_overrides_change_but_not_before(make_workboo
     assert is_done(cfg["paths"]["standardized"], path, [overrides])
     os.utime(overrides, None)
     assert not is_done(cfg["paths"]["standardized"], path, [overrides])
+
+
+def test_the_school_name_in_the_bureau_column_is_replaced_by_our_bureau_but_another_bureau_is_an_error(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(**{"Nama Biro": "SMP Contoh"}), row(**{"Nama Biro": "Universitas Lain"})])
+    assert list(table["Nama Biro"]) == ["Universitas Telkom", "Universitas Lain"]
+    assert [(i.source_row, i.code, i.severity) for i in issues if i.column == "Nama Biro"] == [(2, "default_filled", "warning"), (3, "unknown_value", "error")]
