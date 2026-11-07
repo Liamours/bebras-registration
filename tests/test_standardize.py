@@ -109,6 +109,26 @@ def test_overrides_fix_and_drop_rows(make_workbook, cfg, row, replies):
     assert "override matches no row" in set(report["reason"])
 
 
+def test_a_workbook_with_more_than_one_sheet_is_noted_for_manual_review(make_workbook, cfg, replies, row):
+    import openpyxl
+
+    path = make_workbook("school.xlsx", [row()])
+    wb = openpyxl.load_workbook(path)
+    wb.create_sheet("Siswa Tambahan").append(["Nama Lengkap"])
+    wb.create_sheet("Cadangan").sheet_state = "hidden"
+    wb.save(path)
+    result = process_file(path, cfg, replies, cfg["paths"]["standardized"])
+    report = pd.read_csv(cfg["paths"]["standardized"] / "school.review.csv")
+    note = report[report["code"] == "extra_sheets"]
+    assert result["rows"] == 1 and len(note) == 1
+    assert note.iloc[0]["value"] == "Siswa Tambahan, Cadangan" and "3 sheets" in note.iloc[0]["reason"] and note.iloc[0]["severity"] == "warning"
+
+
+def test_a_workbook_with_one_sheet_has_no_sheet_note(make_workbook, cfg, replies, row):
+    process_file(make_workbook("school.xlsx", [row()]), cfg, replies, cfg["paths"]["standardized"])
+    assert "extra_sheets" not in set(pd.read_csv(cfg["paths"]["standardized"] / "school.review.csv")["code"].fillna(""))
+
+
 def test_configuration_is_consistent():
     cfg = load_config(ROOT / "configs" / "default.yaml")
     assert cfg["columns"][0] == "No" and cfg["flag_error_share"] == 0.30

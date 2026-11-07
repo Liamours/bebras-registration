@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from registration.overrides import apply_overrides
-from registration.readers import read_workbook
+from registration.readers import other_sheets, read_workbook
 from registration.rejection import REJECT_CODES, error_share, structure_reasons
 from registration.replies import build_reply
 from registration.review import Issue, write_report
@@ -63,7 +63,9 @@ def process_file(path: Path, cfg: dict, replies: dict, out_dir: Path, accept_old
         return _reject(path, out_dir, replies, [("reject_no_rows", REJECT_CODES["reject_no_rows"], "")])
     table, value_issues = normalize_values(df, cfg)
 
-    issues: list[Issue] = header_issues + override_issues + example_issues + value_issues
+    sheets = other_sheets(path)
+    sheet_issues = [Issue(path.name, None, "Sheet", ", ".join(sheets), f"the workbook has {len(sheets) + 1} sheets and only the first was read: review the other sheets by hand", "warning", "extra_sheets")] if sheets else []
+    issues: list[Issue] = header_issues + override_issues + example_issues + value_issues + sheet_issues
     table.to_csv(out_dir / f"{path.stem}.csv", index=False, encoding="utf-8")
     write_report(issues, out_dir / f"{path.stem}.review.csv")
     share = error_share(table, issues)
