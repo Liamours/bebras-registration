@@ -130,6 +130,17 @@ def test_a_full_sesi_is_left_out_and_its_students_go_up_later_in_a_file_of_their
     assert later["rows"] == 1 and [r[1] for r in read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / later["file"])[0][1:]] == ["Ani Satu"]
 
 
+def test_students_of_a_resent_sesi_go_up_again_after_a_sesi_change(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001, Sesi="f1", **{"Nama Lengkap": "Ani Satu"}), row(NISN=3000000002, Sesi="a1", **{"Nama Lengkap": "Budi Dua"})])
+    cut(cfg, stamp=STAMP1)
+    assert state(cut(cfg, stamp=STAMP2), "SMP Contoh")["state"] == "nothing_new"
+    cfg["paths"]["overrides"].write_text("source_file,row,column,new_value,reason,student\na.xlsx,2,Sesi,G1,class moved,Ani Satu\n", encoding="utf-8")
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001, Sesi="f1", **{"Nama Lengkap": "Ani Satu"}), row(NISN=3000000002, Sesi="a1", **{"Nama Lengkap": "Budi Dua"})])
+    again = state(cut(cfg, stamp="20261105-1200", resend_sesi=["G1"]), "SMP Contoh")
+    rows, _ = read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / again["file"])
+    assert again["rows"] == 1 and [(r[1], r[14]) for r in rows[1:]] == [("Ani Satu", "G1")]
+
+
 def test_only_the_named_school_gets_a_file(make_workbook, cfg, replies, row):
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001)])
     process(make_workbook, cfg, replies, "b.xlsx", [row(NISN=3000000002, **{"Nama Sekolah": "SMP Dua"})])
