@@ -120,6 +120,16 @@ def test_school_status_held_ready_uploaded(make_workbook, cfg, replies, row):
     assert status()["SMP Contoh"] == "ready"                  # a new student is not on the site yet
 
 
+def test_a_full_sesi_is_left_out_and_its_students_go_up_later_in_a_file_of_their_own(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001, Sesi="b1", **{"Nama Lengkap": "Ani Satu"}), row(NISN=3000000002, Sesi="a1", **{"Nama Lengkap": "Budi Dua"})])
+    first = state(cut(cfg, stamp=STAMP1, exclude_sesi=["B1"]), "SMP Contoh")
+    assert first["state"] == "written" and first["rows"] == 1
+    rows, _ = read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / first["file"])
+    assert [r[1] for r in rows[1:]] == ["Budi Dua"]
+    later = state(cut(cfg, stamp=STAMP2), "SMP Contoh")
+    assert later["rows"] == 1 and [r[1] for r in read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / later["file"])[0][1:]] == ["Ani Satu"]
+
+
 def test_a_second_run_in_the_same_minute_never_overwrites_the_first_file(make_workbook, cfg, replies, row):
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001)])
     assert state(cut(cfg, stamp=STAMP1), "SMP Contoh")["state"] == "written"

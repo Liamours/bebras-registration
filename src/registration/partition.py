@@ -84,7 +84,7 @@ def load_checked(input_dir: Path, ignore_codes: set[str] = frozenset()) -> pd.Da
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
-def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = None) -> pd.DataFrame:
+def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = None, exclude_sesi: list[str] | None = None) -> pd.DataFrame:
     """Write the upload files and return the report (also saved as partition_report.csv)."""
     input_dir = cfg["paths"][cfg["partition_input"]]
     out_dir = cfg["paths"]["submit_ready"]
@@ -117,6 +117,8 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
         rows = group
         if kategori:
             rows = rows[rows["Kategori"].isin(kategori)]
+        if exclude_sesi:  # a full Sesi: those students wait for the school's answer and go up later in a file of their own
+            rows = rows[~rows["Sesi"].isin(exclude_sesi)]
         rows = rows[~rows["NISN"].isin(earlier_nisns(folder))] if folder.exists() else rows
         rows = rows.sort_values(["Kategori", "Nama Lengkap"]).reset_index(drop=True)
         if rows.empty:
