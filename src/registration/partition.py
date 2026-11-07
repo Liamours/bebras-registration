@@ -84,7 +84,7 @@ def load_checked(input_dir: Path, ignore_codes: set[str] = frozenset()) -> pd.Da
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
-def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = None, exclude_sesi: list[str] | None = None) -> pd.DataFrame:
+def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = None, exclude_sesi: list[str] | None = None, only_schools: list[str] | None = None) -> pd.DataFrame:
     """Write the upload files and return the report (also saved as partition_report.csv)."""
     input_dir = cfg["paths"][cfg["partition_input"]]
     out_dir = cfg["paths"]["submit_ready"]
@@ -99,6 +99,8 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
     if "school_slug" not in data.columns:
         data["school_slug"] = data["Nama Sekolah"].map(slugify)
     for slug, group in data.groupby("school_slug", sort=True):  # the slug comes from the school master, so an upload folder is never renamed
+        if only_schools and slug not in only_schools:
+            continue
         school = group["Nama Sekolah"].iloc[0]
         folder = out_dir / slug
         if school == null:
