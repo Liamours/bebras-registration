@@ -23,6 +23,13 @@ The first command only lists new submissions. The second downloads them into the
 
 A line marked `failed` was not downloaded; the usual reason is that the link is not shared with the account that runs the command ("not an xlsx file (the link may need a sign-in ...)"). Download that file by hand into the raw directory. A failed file is retried on the next run.
 
+## Rules of the files
+
+- The tables of `standardized/` are named after the workbook. `standardize` stops when two workbooks have the same name, or a name that collides with a status table, and tells you to rename one of them. Files that are not `.xlsx` (`.xls`, `.xlsm`, `.csv`, `.ods`) are listed as not read; ask the sender for an `.xlsx`.
+- A file is redone when it changed, and also when the overrides file or the configuration is newer than its last run.
+- `reference/overrides.csv` and `reference/assigned_keys.csv` are the memory of the project (the one-off fixes and the keys given to students without a NISN). They are not regenerated and not part of the repository: keep a copy, because deleting `assigned_keys.csv` renumbers the students without a NISN.
+- `partition` leaves out every NISN that is in an earlier upload file of the school, whether or not the file was uploaded. To cut a student again, move the earlier file out of the school's folder.
+
 ## Reading the output
 
 All files go to the standardized directory.

@@ -68,3 +68,8 @@ def test_brackets_and_excel_control_character_artifacts_are_removed():
     name, notes = clean_name("Fina Nailatul Izzah (Slamet)", student=True)
     assert name == "Fina Nailatul Izzah" and [c for c, _ in notes] == ["name_brackets"]
     assert clean_name("Ade Nugraha Sudarsono, S.Kom_x0000_", student=False) == ("Ade Nugraha Sudarsono, S.Kom", [])
+
+
+def test_two_numbers_separated_by_spaces_are_two_numbers():
+    phone, notes = clean_phone("081234567890  081298765432")
+    assert phone == "081234567890" and [c for c, _ in notes] == ["phone_multiple"]

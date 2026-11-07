@@ -15,6 +15,9 @@ def apply_overrides(df: pd.DataFrame, path: Path, source_file: str) -> tuple[pd.
     table = table[table["source_file"] == source_file]
     issues, df = [], df.copy()
     for _, o in table.iterrows():
+        if not o["row"].isdigit() or o["column"] not in df.columns:
+            issues.append(Issue(source_file, 0, o["column"], o["new_value"], f"override line ignored: row {o['row']!r} or column {o['column']!r} is not valid", "warning"))
+            continue
         mask = df["source_row"] == int(o["row"])
         if not mask.any():
             issues.append(Issue(source_file, int(o["row"]), o["column"], o["new_value"], "override matches no row", "warning"))

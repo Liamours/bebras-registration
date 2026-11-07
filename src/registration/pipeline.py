@@ -13,7 +13,7 @@ from registration.standardize import drop_template_examples, normalize_values, r
 from registration.status import upsert_status
 
 
-def _finish(path: Path, out_dir: Path, replies: dict, *, status: str, rows: int = 0, issues=None, share: float = 0.0,
+def record_result(path: Path, out_dir: Path, replies: dict, *, status: str, rows: int = 0, issues=None, share: float = 0.0,
             rejected=None, school: str = "") -> dict:
     """Write the reply draft, record the status line and return it."""
     issues = issues or []
@@ -38,7 +38,7 @@ def _finish(path: Path, out_dir: Path, replies: dict, *, status: str, rows: int 
 def _reject(path: Path, out_dir: Path, replies: dict, reasons) -> dict:
     for suffix in (".csv", ".review.csv"):
         (out_dir / f"{path.stem}{suffix}").unlink(missing_ok=True)
-    return _finish(path, out_dir, replies, status="rejected", rejected=reasons)
+    return record_result(path, out_dir, replies, status="rejected", rejected=reasons)
 
 
 def process_file(path: Path, cfg: dict, replies: dict, out_dir: Path, accept_old_template: bool = False) -> dict:
@@ -68,15 +68,18 @@ def process_file(path: Path, cfg: dict, replies: dict, out_dir: Path, accept_old
     write_report(issues, out_dir / f"{path.stem}.review.csv")
     share = error_share(table, issues)
     schools = [s for s in table["Nama Sekolah"].unique() if s != cfg["null_value"]]
-    return _finish(path, out_dir, replies, status="flagged" if share > cfg["flag_error_share"] else "ok", rows=len(table),
+    return record_result(path, out_dir, replies, status="flagged" if share > cfg["flag_error_share"] else "ok", rows=len(table),
                    issues=issues, share=share, school=schools[0] if len(schools) == 1 else "")
 
 
-def is_done(out_dir: Path, path: Path) -> bool:
-    """True when the file was processed after it last changed."""
+def is_done(out_dir: Path, path: Path, inputs=()) -> bool:
+    """True when the file was processed after it, and every input that changes the result (overrides, configuration), last changed."""
     status_path = out_dir / "status.csv"
     if not status_path.exists():
         return False
     table = pd.read_csv(status_path, dtype=str).fillna("")
     row = table[table["source_file"] == path.name]
-    return not row.empty and datetime.fromisoformat(row.iloc[0]["processed_at"]).timestamp() > path.stat().st_mtime
+    if row.empty:
+        return False
+    processed = datetime.fromisoformat(row.iloc[0]["processed_at"]).timestamp()
+    return all(processed > Path(p).stat().st_mtime for p in [path, *inputs] if Path(p).exists())

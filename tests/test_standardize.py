@@ -45,9 +45,9 @@ def test_variants_are_normalized(make_workbook, cfg, row):
 
 
 def test_nisn_padded_missing_or_malformed(make_workbook, cfg, row):
-    table, issues = run(make_workbook, cfg, [row(NISN=198765432), row(NISN=None), row(NISN="12345"), row(NISN="abcd_00001")])
-    assert list(table["NISN"]) == ["0198765432", "-", "12345", "abcd_00001"]
-    assert errors(issues) == [(3, "missing_nisn"), (4, "nisn_format")]
+    table, issues = run(make_workbook, cfg, [row(NISN=198765432), row(NISN=None), row(NISN="12345"), row(NISN="abcd_00001"), row(NISN="telkomuniversity_00001"), row(NISN="-")])
+    assert list(table["NISN"]) == ["0198765432", "-", "12345", "abcd_00001", "telkomuniversity_00001", "-"]
+    assert errors(issues) == [(3, "missing_nisn"), (4, "nisn_format"), (5, "nisn_format"), (7, "missing_nisn")]  # only our bureau code is a key; a typed "-" is a missing NISN
     assert [(i.source_row, i.code) for i in issues if i.severity == "warning" and i.column == "NISN"] == [(2, "nisn_padded")]
 
 
@@ -114,3 +114,25 @@ def test_configuration_is_consistent():
     assert cfg["columns"][0] == "No" and cfg["flag_error_share"] == 0.30
     assert set(cfg["sesi_by_kategori"]) == set(cfg["kategori_by_kelas"])
     assert all(set(v) <= set(cfg["sesi_valid"]) for v in cfg["sesi_by_kategori"].values())
+
+
+def test_an_override_line_with_a_bad_row_or_column_is_reported_and_does_not_stop_the_run(make_workbook, cfg, replies, row):
+    cfg["paths"]["overrides"].write_text("source_file,row,column,new_value,reason\nschool.xlsx,abc,NISN,1,bad row\nschool.xlsx,2,Nope,1,bad column\nschool.xlsx,2,Gender,Perempuan,fine\n", encoding="utf-8")
+    result = process_file(make_workbook("school.xlsx", [row()]), cfg, replies, cfg["paths"]["standardized"])
+    assert result["status"] == "ok" and result["warnings"] >= 2
+
+
+def test_a_file_is_redone_after_the_overrides_change_but_not_before(make_workbook, cfg, replies, row):
+    import os
+    import time
+
+    from registration.pipeline import is_done
+
+    path = make_workbook("school.xlsx", [row()])
+    process_file(path, cfg, replies, cfg["paths"]["standardized"])
+    overrides = cfg["paths"]["overrides"]
+    overrides.write_text("source_file,row,column,new_value,reason\n", encoding="utf-8")
+    os.utime(overrides, (time.time() - 100, time.time() - 100))
+    assert is_done(cfg["paths"]["standardized"], path, [overrides])
+    os.utime(overrides, None)
+    assert not is_done(cfg["paths"]["standardized"], path, [overrides])

@@ -28,9 +28,17 @@ def cmd_standardize(args, cfg):
     replies = load_replies(args.replies)
     files = sorted(args.input.rglob("*.xlsx")) if args.input.is_dir() else [args.input]
     files = [f for f in files if not f.name.startswith("~$")]
+    names = [f.name for f in files]
+    twice = sorted({n for n in names if names.count(n) > 1})
+    reserved = sorted({f.name for f in files if f.stem in ("status", "rejected", "school_status")})
+    if twice or reserved:  # the output tables are named after the file: a repeated or reserved name would overwrite another file's result
+        raise SystemExit(f"rename before standardizing: same file name more than once {twice}, names that collide with a status table {reserved}")
+    if args.input.is_dir():
+        for other in sorted(p for p in args.input.rglob("*") if p.suffix.lower() in (".xls", ".xlsm", ".csv", ".ods")):
+            tqdm.write(f"not read, only .xlsx is read: {other.name}")
     counts: dict[str, int] = {}
     for path in tqdm(files, desc="files", unit="file"):
-        if is_done(out_dir, path) and not args.force:
+        if is_done(out_dir, path, [cfg["paths"]["overrides"], args.config]) and not args.force:
             continue
         row = process_file(path, cfg, replies, out_dir, args.accept_old_template)
         counts[row["status"]] = counts.get(row["status"], 0) + 1
@@ -93,7 +101,9 @@ def cmd_partition(args, cfg):
 
 
 def cmd_status(args, cfg):
-    table = status.school_status(cfg["paths"]["standardized"], cfg["paths"]["submit_ready"], partition_mod.slugify)
+    students_path = cfg["paths"]["deduplicated"] / "students.csv"
+    students = pd.read_csv(students_path, dtype=str).fillna("") if students_path.exists() else None
+    table = status.school_status(cfg["paths"]["standardized"], cfg["paths"]["submit_ready"], partition_mod.slugify, students)
     table.to_csv(cfg["paths"]["standardized"] / "school_status.csv", index=False, encoding="utf-8")
     print(table["state"].value_counts().to_string() if not table.empty else "no schools yet")
 

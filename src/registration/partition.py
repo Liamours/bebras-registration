@@ -55,6 +55,15 @@ def earlier_nisns(folder: Path) -> set[str]:
     return found
 
 
+def school_folder(out_dir: Path, slug: str) -> Path:
+    """The existing upload folder of a school (compared without underscores), else the folder of its slug."""
+    if out_dir.exists():
+        for p in out_dir.iterdir():
+            if p.is_dir() and p.name.replace("_", "") == slug.replace("_", ""):
+                return p
+    return out_dir / slug
+
+
 def load_checked(input_dir: Path, ignore_codes: set[str] = frozenset()) -> pd.DataFrame:
     """Every processed student row with a flag for rows that still have an error; the deduplicated folder holds one ready table."""
     if (input_dir / "students.csv").exists():
@@ -93,7 +102,7 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
         data["school_slug"] = data["Nama Sekolah"].map(slugify)
     for slug, group in data.groupby("school_slug", sort=True):  # the slug comes from the school master, so an upload folder is never renamed
         school = group["Nama Sekolah"].iloc[0]
-        folder = out_dir / slug
+        folder = school_folder(out_dir, slug)
         if school == null:
             report.append([school, slug, "held", len(group), "", "school name missing"])
             continue
@@ -111,7 +120,7 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
         if rows.empty:
             report.append([school, slug, "nothing_new", 0, "", "no student without an earlier upload file"])
             continue
-        path = folder / f"{slug}-{stamp}.xlsx"
+        path = folder / f"{folder.name}-{stamp}.xlsx"
         write_upload(path, rows, header, null)
         report.append([school, slug, "written", len(rows), path.name, ""])
     out = pd.DataFrame(report, columns=REPORT_COLUMNS)
