@@ -156,6 +156,10 @@ def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Is
 
         # session
         sesi = nul if blank(r["Sesi"]) else text(r["Sesi"]).upper()
+        label = re.match(r"^([A-Z]\d?)\s*[(\[].*[)\]]$", sesi)  # the dropdown label copied whole: "B1 (08.15 - 09.30)"
+        if label:
+            flag("Sesi", r["Sesi"], "sesi_label", f"label with a time copied, read as session {label.group(1)}: check the time against the schedule", "warning")
+            sesi = label.group(1)
         cleaned["Sesi"] = sesi
         if sesi == nul:
             flag("Sesi", r["Sesi"], "sesi_missing", "missing", "warning")

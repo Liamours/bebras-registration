@@ -69,6 +69,12 @@ def test_kategori_checked_against_kelas(make_workbook, cfg, row):
     assert [(i.source_row, i.code, i.severity) for i in issues if i.column == "Kategori"] == [(2, "kategori_mismatch", "error"), (3, "kategori_filled", "warning")]
 
 
+def test_a_session_label_copied_with_its_time_is_read_as_the_letter_with_a_warning(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(Sesi="B1 (08.15 - 09.30)"), row(Sesi="b")])
+    assert list(table["Sesi"]) == ["B1", "B"]
+    assert [(i.code, i.severity) for i in issues if i.code.startswith("sesi")] == [("sesi_label", "warning")]
+
+
 def test_session_must_fit_the_category(make_workbook, cfg, row):
     rows = [
         row(Kategori="SiKecil", Kelas=2, Sesi="E"),          # Friday has no E
