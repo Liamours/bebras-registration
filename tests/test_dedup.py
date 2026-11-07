@@ -144,6 +144,25 @@ def test_a_resent_file_with_an_inserted_row_never_gives_two_students_one_key(mak
     assert report.empty
 
 
+def test_a_corrected_email_or_class_keeps_the_key_of_a_student_without_a_nisn(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, **{"Nama Lengkap": "Ani Satu"})])
+    first = deduplicate(cfg)[0].iloc[0]["NISN"]
+    cfg["paths"]["overrides"].write_text("source_file,row,column,new_value,reason\na.xlsx,2,Email,baru@example.com,corrected\na.xlsx,2,Kelas,8,corrected\n", encoding="utf-8")
+    process_file(cfg["paths"]["standardized"].parent / "a.xlsx", cfg, replies, cfg["paths"]["standardized"])
+    students, report = deduplicate(cfg)
+    assert list(students["NISN"]) == [first] and students.iloc[0]["Email"] == "baru@example.com" and report.empty
+
+
+def test_a_corrected_name_of_a_student_without_a_nisn_is_reported_with_the_old_key(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, **{"Nama Lengkap": "Ani Satu"})])
+    first = deduplicate(cfg)[0].iloc[0]["NISN"]
+    cfg["paths"]["overrides"].write_text("source_file,row,column,new_value,reason\na.xlsx,2,Nama Lengkap,Ani Dua,corrected\n", encoding="utf-8")
+    process_file(cfg["paths"]["standardized"].parent / "a.xlsx", cfg, replies, cfg["paths"]["standardized"])
+    students, report = deduplicate(cfg)
+    assert list(students["NISN"]) == ["telkomuniversity_00002"]  # a new student until a person says otherwise
+    assert list(report["check"]) == ["key_new_for_changed_row"] and first in report.iloc[0]["reason"]
+
+
 def test_two_students_with_one_name_in_one_school_get_two_keys_and_neither_is_dropped(make_workbook, cfg, replies, row):
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, Kelas=7, Email="a@example.com", **{"Nama Lengkap": "Ani Satu"}), row(NISN=None, Kelas=8, Email="b@example.com", **{"Nama Lengkap": "Ani Satu"})])
     students, report = deduplicate(cfg)
