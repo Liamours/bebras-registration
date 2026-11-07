@@ -172,3 +172,8 @@ def test_typed_city_variants(typed, expected):
 
 def test_the_state_prefix_may_be_followed_by_a_hyphen():
     assert schools.canonical("SMPN-1 Pacet") == "SMP Negeri 1 Pacet"
+
+
+def test_more_typed_city_forms():
+    assert schools.regions_of("Kab. Bandung Brt") == ("Kabupaten Bandung Barat",)
+    assert schools.regions_of("Kota/Kabupaten Bandung") == ("Kota Bandung", "Kabupaten Bandung")  # both words: nothing is chosen

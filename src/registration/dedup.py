@@ -25,7 +25,8 @@ def assign_keys(data: pd.DataFrame, state_path: Path, code: str, null: str) -> p
     """A student without a NISN gets `<code>_NNNNN`. The key is stored with the file and row and with the name and school, so a rerun, a resent file with
     shifted rows or a renamed file gives the same student the same key, and a number is never used twice."""
     pattern = re.compile(rf"^{re.escape(code)}_(\d{{5}})$")
-    state = pd.read_csv(state_path, dtype=str).reindex(columns=KEY_COLUMNS).fillna("") if state_path.exists() else pd.DataFrame(columns=KEY_COLUMNS)
+    has_state = state_path.exists() and state_path.stat().st_size > 2  # an empty file is read as no state: the keys are then built from the data alone
+    state = pd.read_csv(state_path, dtype=str).reindex(columns=KEY_COLUMNS).fillna("") if has_state else pd.DataFrame(columns=KEY_COLUMNS)
     used = [int(m.group(1)) for k in [*state["key"], *data["NISN"]] if (m := pattern.match(str(k)))]
     last = max(used, default=0)
     lines = [(r["source_file"], r["source_row"], r["key"], r["name_key"], r["school_key"]) for _, r in state.iterrows()]
@@ -35,7 +36,9 @@ def assign_keys(data: pd.DataFrame, state_path: Path, code: str, null: str) -> p
     data["note"] = ""
     for i in data[data["NISN"] == null].sort_values(["source_file", "source_row"], key=lambda s: s.astype(str).str.zfill(8)).index:
         ref = (data.at[i, "source_file"], str(data.at[i, "source_row"]))
-        who = (letters(data.at[i, "Nama Lengkap"]), letters(data.at[i, "Nama Sekolah"]))
+        # the same student is the same name, school (its slug, which a change of the master does not alter), class and email; one difference makes a new student,
+        # and two students that look alike are told apart by the check on name and school instead of being merged
+        who = (letters(data.at[i, "Nama Lengkap"]), f"{data.at[i, 'school_slug']}|{data.at[i, 'Kelas']}|{letters(data.at[i, 'Email'])}")
         stored = by_ref.get(ref)
         if stored and (not stored[1] or (stored[1], stored[2]) == who):  # the row of an earlier run, and still the same student
             key = stored[0]
@@ -51,7 +54,9 @@ def assign_keys(data: pd.DataFrame, state_path: Path, code: str, null: str) -> p
             by_student.setdefault(who, key)
         data.at[i, "NISN"] = key
         data.at[i, "note"] = "key assigned, the student has no NISN"
-    pd.DataFrame(lines, columns=KEY_COLUMNS).to_csv(state_path, index=False, encoding="utf-8")
+    temp = state_path.with_suffix(".tmp")  # written whole, then put in place, so an interrupted write cannot leave an empty keys file
+    pd.DataFrame(lines, columns=KEY_COLUMNS).to_csv(temp, index=False, encoding="utf-8")
+    temp.replace(state_path)
     return data
 
 

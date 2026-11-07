@@ -73,13 +73,15 @@ def index(master: pd.DataFrame) -> dict[str, list[int]]:
 def regions_of(city: str) -> tuple[str, ...]:
     """The regions a typed Kota/Kabupaten value can mean; empty when it says nothing usable. Read by words: KBB, Bdg and Kab. are understood."""
     words = re.findall(r"[a-z]+", str(city).lower())
-    words = [{"bdg": "bandung", "kab": "kabupaten", "kbb": "kbb"}.get(w, w) for w in words]
+    words = [{"bdg": "bandung", "kab": "kabupaten", "kbb": "kbb", "brt": "barat"}.get(w, w) for w in words]
     if "kbb" in words or any(a == "bandung" and b == "barat" for a, b in zip(words, words[1:])):  # `Bandung, Jawa Barat` is not Bandung Barat
         return ("Kabupaten Bandung Barat",)
     if "cimahi" in words:
         return ("Kota Cimahi",)
     if "bandung" in words:
-        return ("Kota Bandung",) if "kota" in words else (("Kabupaten Bandung",) if "kabupaten" in words else ("Kota Bandung", "Kabupaten Bandung"))
+        if ("kota" in words) == ("kabupaten" in words):  # neither word, or both as in Kota/Kabupaten Bandung: nothing is chosen
+            return ("Kota Bandung", "Kabupaten Bandung")
+        return ("Kota Bandung",) if "kota" in words else ("Kabupaten Bandung",)
     return ()
 
 

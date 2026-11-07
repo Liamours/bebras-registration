@@ -135,3 +135,19 @@ def test_a_resent_file_with_an_inserted_row_never_gives_two_students_one_key(mak
     keys = dict(zip(students["Nama Lengkap"], students["NISN"]))
     assert len(students) == 2 and len(set(keys.values())) == 2 and keys["Ani Satu"] == "telkomuniversity_00001"  # Ani keeps her key, the new student gets the next one
     assert report.empty
+
+
+def test_two_students_with_one_name_in_one_school_get_two_keys_and_neither_is_dropped(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, Kelas=7, Email="a@example.com", **{"Nama Lengkap": "Ani Satu"}), row(NISN=None, Kelas=8, Email="b@example.com", **{"Nama Lengkap": "Ani Satu"})])
+    students, report = deduplicate(cfg)
+    assert len(students) == 2 and students["NISN"].nunique() == 2
+    assert set(report["check"]) == {"same_name_in_school"}  # listed for a person, not merged
+
+
+def test_an_empty_keys_file_is_read_as_no_state_and_is_written_whole(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None)])
+    cfg["paths"]["assigned_keys"].parent.mkdir(parents=True, exist_ok=True)
+    cfg["paths"]["assigned_keys"].write_bytes(b"")
+    students, _ = deduplicate(cfg)
+    assert list(students["NISN"]) == ["telkomuniversity_00001"]
+    assert not cfg["paths"]["assigned_keys"].with_suffix(".tmp").exists() and cfg["paths"]["assigned_keys"].stat().st_size > 0
