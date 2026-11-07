@@ -32,6 +32,13 @@ def test_the_same_key_twice_in_one_school_keeps_the_fuller_row_and_lists_both(ma
     assert set(report["source_file"]) == {"a.xlsx"} and sorted(report["source_row"]) == ["2", "3"]  # every row stays traceable
 
 
+def test_the_same_nisn_under_different_names_in_one_school_is_not_decided_and_holds_both(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(**{"Nama Lengkap": "Ani Satu"}), row(**{"Nama Lengkap": "Budi Dua"})])
+    students, report = deduplicate(cfg)
+    assert len(students) == 2 and students["has_error"].all()
+    assert list(report["check"]) == ["same_key_different_names"] * 2 and set(report["kept"]) == {"held"}
+
+
 def test_the_same_key_under_two_schools_is_not_decided_and_holds_both(make_workbook, cfg, replies, row):
     a, b = two()
     process(make_workbook, cfg, replies, "a.xlsx", [row(**a)])
