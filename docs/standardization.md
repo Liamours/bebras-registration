@@ -11,7 +11,7 @@ Rule of thumb: fix what is certain (case, spacing, spelling variants from a list
 | Student name (`Nama Lengkap`) | Spaces collapsed, stray characters removed (`name_chars`), text in brackets removed (`name_brackets`), academic degrees at the end and `Dr`, `Drs`, `Dra`, `Ir`, `Prof` at the start removed (`name_title_removed`) |
 | Case | A name in all capitals or all lower case becomes normal case (apostrophes and hyphens respected, roman numerals such as `III` kept). A name with mixed case is left as typed |
 | Accompanying person (`Nama Pendamping`) | Same cleaning, degrees kept |
-| Reported, not changed | Digits in a name (`name_digits`), a single-word student name (`name_single_word`), an empty name after cleaning (`missing_name`, an error for a student) |
+| Reported, not changed | Digits in a name (`name_digits`), a single-word student name (`name_single_word`), a name converted from capitals that holds an apostrophe (`name_apostrophe`, the letter after it is written in lower case: Ma'ruf), an empty name after cleaning (`missing_name`, an error for a student) |
 
 Degrees are removed only when they match a list (`S.Pd`, `S.Kom`, `M.Pd`, ...) with the dot after S or M, so an initial such as `M. Ali` stays. Excel's escape for an invisible character (`_x0000_`) is removed.
 
