@@ -34,26 +34,43 @@ def assign_keys(data: pd.DataFrame, state_path: Path, code: str, null: str) -> p
     by_student = {(n, s): k for _, _, k, n, s in lines if n}
     data = data.copy()
     data["note"] = ""
-    for i in data[data["NISN"] == null].sort_values(["source_file", "source_row"], key=lambda s: s.astype(str).str.zfill(8)).index:
-        ref = (data.at[i, "source_file"], str(data.at[i, "source_row"]))
-        # the same student is the same name, school (its slug, which a change of the master does not alter), class and email; one difference makes a new student,
-        # and two students that look alike are told apart by the check on name and school instead of being merged
-        who = (letters(data.at[i, "Nama Lengkap"]), f"{data.at[i, 'school_slug']}|{data.at[i, 'Kelas']}|{letters(data.at[i, 'Email'])}")
-        stored = by_ref.get(ref)
-        if stored and (not stored[1] or (stored[1], stored[2]) == who):  # the row of an earlier run, and still the same student
-            key = stored[0]
-        else:  # a resent file with shifted rows: the student is found by name and school, else it is a new student
-            key = by_student.get(who) if who[0] else None
-            if key is None:
+    data["old_key"] = ""
+    order = list(data[data["NISN"] == null].sort_values(["source_file", "source_row"], key=lambda s: s.astype(str).str.zfill(8)).index)
+    # the same student is the same name, school (its slug, which a change of the master does not alter), class and email; two students that look alike
+    # are told apart by the check on name and school instead of being merged
+    refs = {i: (data.at[i, "source_file"], str(data.at[i, "source_row"])) for i in order}
+    whos = {i: (letters(data.at[i, "Nama Lengkap"]), f"{data.at[i, 'school_slug']}|{data.at[i, 'Kelas']}|{letters(data.at[i, 'Email'])}") for i in order}
+    keys: dict = {}
+    for i in order:  # pass 1: the row of an earlier run that is still the same student, or the student found at another row
+        stored, who = by_ref.get(refs[i]), whos[i]
+        if stored and (not stored[1] or (stored[1], stored[2]) == who):
+            keys[i] = stored[0]
+        elif who[0] and who in by_student:
+            keys[i] = by_student[who]
+    claimed = set(keys.values())
+    for i in order:  # pass 2: same row, same name and school, only the class or the email changed (a correction): the student keeps the key if no other row holds it
+        stored, who = by_ref.get(refs[i]), whos[i]
+        if i not in keys and stored and who[0] and stored[1] == who[0] and stored[2].split("|")[0] == who[1].split("|")[0] and stored[0] not in claimed:
+            keys[i] = stored[0]
+            claimed.add(stored[0])
+    for i in order:  # pass 3: a student not seen before gets the next number; a row that held another student in an earlier run is reported
+        who = whos[i]
+        if i not in keys:
+            keys[i] = by_student.get(who) if who[0] else None
+            if keys[i] is None:
                 last += 1
-                key = f"{code}_{last:05d}"
-        if (ref[0], ref[1], key, *who) not in lines:
-            lines.append((ref[0], ref[1], key, *who))
-        by_ref[ref] = (key, *who)
+                keys[i] = f"{code}_{last:05d}"
+                if refs[i] in by_ref and by_ref[refs[i]][1]:
+                    data.at[i, "old_key"] = by_ref[refs[i]][0]
+        key = keys[i]
+        if (*refs[i], key, *who) not in lines:
+            lines.append((*refs[i], key, *who))
+        by_ref[refs[i]] = (key, *who)
         if who[0]:
             by_student.setdefault(who, key)
         data.at[i, "NISN"] = key
         data.at[i, "note"] = "key assigned, the student has no NISN"
+    data.loc[data["old_key"].isin(set(data["NISN"])), "old_key"] = ""  # the old student is still in the data at another row: only the rows moved, nothing to report
     temp = state_path.with_suffix(".tmp")  # written whole, then put in place, so an interrupted write cannot leave an empty keys file
     pd.DataFrame(lines, columns=KEY_COLUMNS).to_csv(temp, index=False, encoding="utf-8")
     temp.replace(state_path)
@@ -89,6 +106,8 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
     def line(check, key, row, kept, reason):
         report.append([check, key, row["Nama Sekolah"], row["source_file"], row["source_row"], kept, reason])
 
+    for _, row in data[data["old_key"] != ""].iterrows():  # the same file and row held another student before: a new student, or the same one corrected in more than one field
+        line("key_new_for_changed_row", row["NISN"], row, "yes", f"this row held another student under {row['old_key']}; if it is the same student (a correction), set NISN to {row['old_key']} in overrides.csv so no second account is made")
     for key, group in data.groupby("NISN", sort=True):
         if len(group) < 2:
             continue
@@ -115,7 +134,7 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
         if name_key and group["NISN"].nunique() > 1:  # a row without a name is already an error of its own  # one student entered twice under different keys, or two students with one name
             for _, row in group.iterrows():
                 line("same_name_in_school", row["Nama Lengkap"], row, "yes", "same name and school under different keys, check by hand")
-    students = data.drop(columns=["school_key", "name_key", "school_ambiguous"]).reset_index(drop=True)
+    students = data.drop(columns=["school_key", "name_key", "school_ambiguous", "old_key"]).reset_index(drop=True)
     duplicates = pd.DataFrame(report, columns=REPORT_COLUMNS)
     students.to_csv(out_dir / "students.csv", index=False, encoding="utf-8")
     duplicates.to_csv(out_dir / "duplicates.csv", index=False, encoding="utf-8")
