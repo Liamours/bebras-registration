@@ -131,6 +131,11 @@ def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Is
                     flag(col, r[col], "missing_value", "missing", "warning")
                 continue
             key = text(r[col]).lower()
+            same_as_school = re.sub(r"[^a-z0-9]", "", key) == re.sub(r"[^a-z0-9]", "", text(r["Nama Sekolah"]).lower())
+            if key not in m and col in cfg["defaults"] and same_as_school:  # the school name was typed in the bureau column: the bureau is ours
+                cleaned[col] = cfg["defaults"][col]
+                flag(col, r[col], "default_filled", f"held the school name, replaced with {cleaned[col]}", "warning")
+                continue
             cleaned[col] = m.get(key, text(r[col]))
             if key not in m:
                 flag(col, r[col], "unknown_value", f"'{text(r[col])}' is not an accepted value for {col}")
