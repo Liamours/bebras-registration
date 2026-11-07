@@ -129,6 +129,18 @@ def test_a_workbook_with_one_sheet_has_no_sheet_note(make_workbook, cfg, replies
     assert "extra_sheets" not in set(pd.read_csv(cfg["paths"]["standardized"] / "school.review.csv")["code"].fillna(""))
 
 
+def test_an_override_applies_only_to_the_student_it_names(make_workbook, cfg, replies, row):
+    cfg["paths"]["overrides"].write_text("source_file,row,column,new_value,reason,student\nschool.xlsx,2,Gender,Perempuan,fix,Ani Satu\nschool.xlsx,3,Gender,Perempuan,fix,Ani Satu\nschool.xlsx,4,Gender,Perempuan,fix,\n", encoding="utf-8")
+    rows = [row(Gender="laki laki", **{"Nama Lengkap": "ANI SATU"}), row(Gender="laki laki", **{"Nama Lengkap": "Budi Dua"}), row(Gender="laki laki", **{"Nama Lengkap": "Cici Tiga"})]
+    result = process_file(make_workbook("school.xlsx", rows), cfg, replies, cfg["paths"]["standardized"])
+    table = pd.read_csv(cfg["paths"]["standardized"] / "school.csv", dtype=str)
+    report = pd.read_csv(cfg["paths"]["standardized"] / "school.review.csv")
+    assert list(table["Gender"]) == ["Perempuan", "Laki-laki", "Perempuan"]  # the second line names another student: not applied; the third names nobody: applied with a warning
+    wrong = report[report["code"] == "override_wrong_student"]
+    assert list(wrong["source_row"]) == [3] and list(wrong["severity"]) == ["error"] and result["errors"] >= 1
+    assert list(report[report["code"] == "override_no_student"]["source_row"]) == [4]
+
+
 def test_configuration_is_consistent():
     cfg = load_config(ROOT / "configs" / "default.yaml")
     assert cfg["columns"][0] == "No" and cfg["flag_error_share"] == 0.30

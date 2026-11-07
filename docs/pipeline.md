@@ -79,7 +79,7 @@ The code never guesses on an unclear value. Each file gets `<name>.review.csv` w
 - `error`: the school's output is held until the row is resolved.
 - `warning`: the output is written and the line is listed (a spelling variant fixed automatically, a padded NISN).
 
-A row is resolved in one of three ways. A pattern that repeats across files becomes a rule in `configs/default.yaml`. A single case becomes one line in the overrides file: `source_file,row,column,new_value,reason`, where the new value `__drop__` removes the row. A case that needs the sender is clarified with them first, then recorded as an override.
+A row is resolved in one of three ways. A pattern that repeats across files becomes a rule in `configs/default.yaml`. A single case becomes one line in the overrides file: `source_file,row,column,new_value,reason,student`, where the new value `__drop__` removes the row. A case that needs the sender is clarified with them first, then recorded as an override.
 
 Overrides apply to the raw cell values before normalization, so an override value is normalized and checked like any other. Overrides that match no row are reported.
 

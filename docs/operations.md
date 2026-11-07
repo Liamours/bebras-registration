@@ -61,7 +61,7 @@ Always open `rejected.csv` and the `flagged` files first: a rejected file produc
 | One case | One wrong NISN that the sender confirmed, one row to drop | Add one line to the overrides file, then `standardize <that file> --force` |
 | Needs the sender | Missing NISN, a student entered under the wrong category | Send the draft from `replies/`, wait for the corrected file. Nothing is sent by the code |
 
-The overrides file has the columns `source_file,row,column,new_value,reason`. The new value `__drop__` removes the row. An override value goes through the normal checks. Overrides that match no row are reported as a warning, which also catches an override that outlived a corrected file.
+The overrides file has the columns `source_file,row,column,new_value,reason,student`. The new value `__drop__` removes the row. `student` is the name in that row when the line is written (`(no name)` for a row sent without one): when a resent file puts another student in that row, the line is not applied and the row gets an error, so move the line to the right row. A line without `student` still applies and gets a warning. An override value goes through the normal checks. Overrides that match no row are reported as a warning, which also catches an override that outlived a corrected file.
 
 ```csv
 source_file,row,column,new_value,reason
