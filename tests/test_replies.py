@@ -21,7 +21,7 @@ def test_warnings_alone_give_no_reply(replies):
 
 def test_every_error_code_the_stages_can_raise_has_a_message(replies):
     errors = {"missing_name", "missing_school", "missing_nisn", "nisn_format", "unknown_value", "kelas_invalid",
-              "kategori_mismatch", "sesi_invalid", "sesi_category", "duplicate_nisn"}
+              "kategori_mismatch", "sesi_invalid", "sesi_category"}
     rejects = {"reject_unreadable", "reject_no_table", "reject_no_rows", "reject_missing_column", "reject_old_template"}
     assert (errors | rejects) <= set(replies["codes"])
 
@@ -33,5 +33,5 @@ def test_rejected_file_message_names_the_missing_columns(replies):
 
 def test_every_reply_code_is_documented(replies):
     from pathlib import Path
-    page = Path("docs/reply-templates.md").read_text(encoding="utf-8")
+    page = Path(__file__).resolve().parents[1].joinpath("docs", "reply-templates.md").read_text(encoding="utf-8")
     assert all(f"`{code}`" in page for code in replies["codes"])

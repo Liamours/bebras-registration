@@ -32,4 +32,3 @@ Row numbers in a message are the row numbers the sender sees in Excel. Only erro
 | `kategori_mismatch` | Kategori does not match Kelas. | Kategori tidak sesuai dengan kelas, {rows} (SiKecil kelas 1-3, Siaga kelas 4-6, Penggalang kelas 7-9, Penegak kelas 10-12). |
 | `sesi_invalid` | Sesi is not a session letter. | Sesi harus berupa huruf A sampai I (atau A1 sampai I1 untuk hari Rabu), {rows}. |
 | `sesi_category` | Sesi is not available for the student's category. | Sesi tidak tersedia untuk kategorinya, {rows} (sesi E tidak tersedia untuk SiKecil; sesi A1 sampai I1 hanya untuk Penggalang). |
-| `duplicate_nisn` | The same NISN appears more than once (used by the deduplication stage). | NISN sama dengan siswa lain, {rows}. Setiap siswa harus memiliki NISN yang berbeda. |

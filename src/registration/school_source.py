@@ -56,7 +56,10 @@ def build(cfg: dict, out: Path, state: Path, log) -> int:
             key = f"{kec_code}/{level}/{form}"
             if key in done:
                 continue
-            rows = parse_rows(get(f"{base}/{level}/{kec_code}/3/jf/{form_code}"))
+            page = get(f"{base}/{level}/{kec_code}/3/jf/{form_code}")
+            if "DAFTAR SATUAN PENDIDIKAN" not in page:  # the layout changed or an error page came back
+                raise RuntimeError(f"no school table on the page of {kec} ({form}); stop and look")
+            rows = parse_rows(page)
             for npsn, name, address, kelurahan, status in rows:
                 writer.writerow([npsn, name, address, kelurahan, status, form, region, kec, date.today().isoformat()])
             f.flush()  # the rows are on disk before the page counts as done

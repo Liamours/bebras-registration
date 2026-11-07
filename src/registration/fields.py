@@ -71,7 +71,8 @@ def clean_name(value, *, student: bool) -> tuple[str, list[tuple[str, str]]]:
 def clean_phone(value) -> tuple[str, list[tuple[str, str]]]:
     """Digits only in the 08... form; with several numbers the first is kept."""
     notes: list[tuple[str, str]] = []
-    parts = [p for p in re.split(r"[/;,]|\sdan\s|\s{2,}", text(value)) if re.sub(r"\D", "", p)]
+    raw = value.strip() if isinstance(value, str) else text(value)  # the whitespace is kept so that two numbers separated by spaces can be told apart
+    parts = [p for p in re.split(r"[/;,]|\sdan\s|\s{2,}", raw) if re.sub(r"\D", "", p)]
     if len(parts) > 1:
         notes.append(("phone_multiple", "several numbers, the first is kept"))
     digits = re.sub(r"\D", "", parts[0]) if parts else ""

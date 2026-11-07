@@ -14,6 +14,7 @@ ACRONYMS = {"sd", "smp", "sma", "smk", "mi", "ma", "mak", "sdit", "smpit", "smai
             "tk", "it", "ii", "iii", "iv", "pgri", "ypi", "ypk", "nu", "uptd", "ikip", "pkbm", "kb"}
 SPECIAL = {"mts": "MTs", "mis": "MIS", "mts.": "MTs"}
 MIN_SUGGESTION = 0.85
+SHARED_MARK = "NPSN"  # a suggestion that carries an NPSN names a candidate of a shared name, not a close spelling
 # the ministry's list leaves the city out of a school's name, senders add it at the end: key ending -> the regions it can mean
 CITY_ENDING = {"kotabandung": ("Kota Bandung",), "kabupatenbandungbarat": ("Kabupaten Bandung Barat",), "kabbandungbarat": ("Kabupaten Bandung Barat",),
                "kabupatenbandung": ("Kabupaten Bandung",), "kabbandung": ("Kabupaten Bandung",), "bandungbarat": ("Kabupaten Bandung Barat",),
@@ -28,7 +29,7 @@ def canonical(name: str) -> str:
     """Canonical spelling: SMPN 1 becomes SMP Negeri 1, a digit is split from a letter, acronyms are capitals, other words start with a capital."""
     s = re.sub(r"\s+", " ", str(name)).strip()
     s = re.sub(r"(?i)^(smp|sma|smk|sd|mts|mi|ma)\s+n\.?(?=\s|\d)", lambda m: m.group(1) + "n", s)  # SMP N 1 is SMPN 1
-    s = re.sub(r"(?i)^(smpn|sman|smkn|sdn|mtsn|min|man)\.", lambda m: m.group(1) + " ", s)  # SMPN.1 is SMPN 1
+    s = re.sub(r"(?i)^(smpn|sman|smkn|sdn|mtsn|min|man)[\.-]", lambda m: m.group(1) + " ", s)  # SMPN.1 is SMPN 1
     s = re.sub(r"(?<=\d)(?=[A-Za-z])|(?<=[A-Za-z])(?=\d)", " ", s)
     s = re.sub(r"\b0+(?=\d)", "", s)  # 01 is 1
     words = s.split(" ")
@@ -70,11 +71,15 @@ def index(master: pd.DataFrame) -> dict[str, list[int]]:
 
 
 def regions_of(city: str) -> tuple[str, ...]:
-    """The regions a typed Kota/Kabupaten value can mean; empty when it says nothing usable."""
-    k = re.sub(r"^kab(upaten)?", "kabupaten", re.sub(r"[^a-z]", "", str(city).lower()))
-    for ending, regions in CITY_ENDING.items():
-        if k.startswith(ending):
-            return regions
+    """The regions a typed Kota/Kabupaten value can mean; empty when it says nothing usable. Read by words: KBB, Bdg and Kab. are understood."""
+    words = re.findall(r"[a-z]+", str(city).lower())
+    words = [{"bdg": "bandung", "kab": "kabupaten", "kbb": "kbb"}.get(w, w) for w in words]
+    if "kbb" in words or any(a == "bandung" and b == "barat" for a, b in zip(words, words[1:])):  # `Bandung, Jawa Barat` is not Bandung Barat
+        return ("Kabupaten Bandung Barat",)
+    if "cimahi" in words:
+        return ("Kota Cimahi",)
+    if "bandung" in words:
+        return ("Kota Bandung",) if "kota" in words else (("Kabupaten Bandung",) if "kabupaten" in words else ("Kota Bandung", "Kabupaten Bandung"))
     return ()
 
 
@@ -94,13 +99,13 @@ def lookup(name: str, master: pd.DataFrame, idx: dict[str, list[int]] | None = N
                 break
     if ending_regions:  # a school whose list name lacks the city must lie in the city the sender wrote
         candidates = [i for i in candidates if master.at[i, "region"] in ending_regions]
-    elif len(candidates) > 1:
+    if len(candidates) > 1:
         narrowed = [i for i in candidates if master.at[i, "region"] in regions_of(city)]
         candidates = narrowed or candidates
     if len(candidates) == 1:
         return master.loc[candidates[0]], []
     if candidates:
-        return None, [f"{master.at[i, 'canonical_name']} ({master.at[i, 'region']}, NPSN {master.at[i, 'npsn']})" for i in candidates[:3]]
+        return None, [f"{master.at[i, 'canonical_name']} ({master.at[i, 'region']}, {SHARED_MARK} {master.at[i, 'npsn']})" for i in candidates[:3]]
     close = get_close_matches(k, list(idx), n=3, cutoff=MIN_SUGGESTION)
     return None, [master.at[idx[c][0], "canonical_name"] for c in close if len(idx[c]) == 1]
 
@@ -115,7 +120,7 @@ def canonicalize(table: pd.DataFrame, master: pd.DataFrame, null: str = "-") -> 
     table = table.copy()
     idx = index(master)
     counts: dict[tuple, int] = {}
-    slugs, suggested, cache = [], {}, {}
+    slugs, suggested, cache, ambiguous = [], {}, {}, []
     for i, row in table.iterrows():
         raw, city = row["Nama Sekolah"], row["Kota/Kabupaten"]
         typed = regions_of(city)
@@ -125,22 +130,33 @@ def canonicalize(table: pd.DataFrame, master: pd.DataFrame, null: str = "-") -> 
         if found is not None:
             table.at[i, "Nama Sekolah"] = found["canonical_name"]
             slugs.append(found["school_slug"])
+            ambiguous.append(False)
             if found["region"] in REGIONS:
                 table.at[i, "Kota/Kabupaten"] = found["region"]
                 if typed and found["region"] not in typed:
                     k = ("region_conflict", found["canonical_name"], f"{city} -> {found['region']}", "-")
                     counts[k] = counts.get(k, 0) + 1
+            elif len(typed) == 1:  # a school outside the four regions: the typed city is read as for an unknown school
+                table.at[i, "Kota/Kabupaten"] = typed[0]
+            elif len(typed) > 1:
+                k = ("region_ambiguous", found["canonical_name"], city, " | ".join(typed))
+                counts[k] = counts.get(k, 0) + 1
             continue
         table.at[i, "Nama Sekolah"] = canonical(raw) if raw != null else raw
         suggested[table.at[i, "Nama Sekolah"]] = suggestions
-        slugs.append(slugify(table.at[i, "Nama Sekolah"]))
+        shared = bool(suggestions) and SHARED_MARK in suggestions[0]  # several schools carry this name
+        ambiguous.append(shared)
+        slugs.append(slugify(table.at[i, "Nama Sekolah"]) + ("_ambiguous" if shared else ""))
         if len(typed) == 1:
             table.at[i, "Kota/Kabupaten"] = typed[0]
         elif len(typed) > 1:
             k = ("region_ambiguous", raw, city, " | ".join(typed))
             counts[k] = counts.get(k, 0) + 1
     table["school_slug"] = slugs
-    for school, group in table[~table["school_slug"].isin(set(master["school_slug"]))].groupby("Nama Sekolah"):
+    table["school_ambiguous"] = ambiguous
+    for school, group in table[table["school_ambiguous"]].groupby("Nama Sekolah"):
+        counts[("school_ambiguous", school, school, " | ".join(suggested.get(school, [])))] = len(group)
+    for school, group in table[~table["school_slug"].isin(set(master["school_slug"])) & ~table["school_ambiguous"]].groupby("Nama Sekolah"):
         counts[("school_unmatched", school, school, " | ".join(suggested.get(school, [])) or "-")] = len(group)
     review = [[check, school, value, suggestions, n] for (check, school, value, suggestions), n in counts.items()]
     return table, pd.DataFrame(review, columns=REVIEW_COLUMNS)

@@ -7,7 +7,7 @@
 | 0 | Intake | `intake` | The submission form's response sheet | New workbooks in the raw directory, a state file, a routing table |
 | 1 | Standardize | `standardize` | Workbooks in the raw directory | `standardized/`: tables, review reports, reply drafts, status tables |
 | S | School list | `school-source`, `school-master` | The ministry's reference pages, earlier workbooks, `standardized/` | `reference/schools_kemendikdasmen.csv`, `reference/school_master.csv` |
-| 2 | Deduplicate | `dedup` | `standardized/` | `deduplicated/`: `students.csv`, `duplicates.csv`, `assigned_keys.csv` |
+| 2 | Deduplicate | `dedup` | `standardized/` | `deduplicated/`: `students.csv`, `duplicates.csv`, `school_review.csv` |
 | 3 | Partition | `partition` (runs `dedup` first) | `deduplicated/` | `submit_ready/<school>/` and `partition_report.csv` |
 | 5 | Report | `report` | `deduplicated/students.csv`, `standardized/status.csv` | `deduplicated/statistics.csv` |
 | 4 | Status | `status`, `mark-uploaded` | Standardized tables, upload files | `school_status.csv`, `uploaded.csv` |
@@ -41,7 +41,7 @@ Rejection is for structure only, because a file with many bad rows usually has o
 
 ## 2. Deduplicate
 
-`dedup` reads every processed table of `standardized/` and writes `students.csv` (one row per student, with `has_error` and a `note`), `duplicates.csv` (the report) and `assigned_keys.csv` (the keys it gave). `partition` runs it first, so the upload files are always cut from a fresh table.
+`dedup` reads every processed table of `standardized/` and writes `students.csv` (one row per student, with `has_error` and a `note`), `duplicates.csv` (the report) and `school_review.csv`; the keys it gives are kept in `reference/assigned_keys.csv`. `partition` runs it first, so the upload files are always cut from a fresh table.
 
 - **Key.** NISN, kept as text with leading zeros. A student without a NISN gets `<bureau_code>_NNNNN` (`bureau_code` in the configuration: `telkomuniversity`). The number goes on from the highest one already in the stored keys or in the data. The key given to a row (source file and row) is stored in `reference/assigned_keys.csv`, which is not regenerated, so a rerun gives the same key and a number is never used twice; do not delete that file.
 - **The same key twice in one school.** The row with more filled fields is kept (on a tie the earlier file and row). Both rows are listed in the report, the dropped one marked `no`.
@@ -103,6 +103,6 @@ Every error code has a message in `configs/replies.yaml` (listed in [reply-templ
 | `partition` | Split per school and write upload files |
 | `intake` | New submissions from the response sheet |
 | `cli` | Command line entry point |
-| `schools`, `dedup` (planned) | Canonical school names; keys and duplicates |
+| `schools`, `school_source`, `dedup`, `report` | Canonical school names and regions, the ministry list, keys and duplicates, statistics |
 
 Each stage works on tables, so modules can be written and tested separately.

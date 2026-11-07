@@ -1,3 +1,4 @@
+import pandas as pd
 import openpyxl
 import pytest
 
@@ -117,3 +118,17 @@ def test_school_status_held_ready_uploaded(make_workbook, cfg, replies, row):
     assert status()["SMP Contoh"] == "uploaded"
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001), row(NISN=3000000002), row(NISN=3000000003)])
     assert status()["SMP Contoh"] == "ready"                  # a new student is not on the site yet
+
+
+def test_a_school_keeps_its_upload_folder_when_the_slug_is_spelled_differently(tmp_path):
+    from registration.partition import school_folder
+
+    (tmp_path / "smp_mathla_ul_anwar").mkdir()
+    assert school_folder(tmp_path, "smp_mathlaul_anwar").name == "smp_mathla_ul_anwar" and school_folder(tmp_path, "smp_baru").name == "smp_baru"
+
+
+def test_school_status_from_the_deduplicated_table_agrees_with_partition(tmp_path):
+    students = pd.DataFrame([["smp_a", "SMP A", "3000000001", "False", "a.xlsx"], ["smp_a", "SMP A", "telkomuniversity_00001", "False", "a.xlsx"], ["smp_b", "SMP B", "3000000002", "True", "b.xlsx"]],
+                            columns=["school_slug", "Nama Sekolah", "NISN", "has_error", "source_file"])
+    table = school_status(tmp_path, tmp_path, slugify, students)
+    assert dict(zip(table["school"], table["state"])) == {"SMP A": "ready", "SMP B": "held"}  # a key given to a student without a NISN is no error

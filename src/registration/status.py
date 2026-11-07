@@ -43,8 +43,17 @@ def mark_uploaded(submit_dir: Path, file_name: str) -> None:
     table.to_csv(log, index=False, encoding="utf-8")
 
 
-def school_status(standardized: Path, submit_dir: Path, slugify) -> pd.DataFrame:
-    """One line per school: files, students, rows in error and a state (held, ready or uploaded)."""
+def school_status(standardized: Path, submit_dir: Path, slugify, students: pd.DataFrame | None = None) -> pd.DataFrame:
+    """One line per school: files, students, rows in error and a state (held, ready or uploaded).
+
+    With the deduplicated table the state is the one `partition` acts on (a key given to a student without a NISN is no error)."""
+    if students is not None and not students.empty:
+        out = []
+        for slug, group in students.groupby("school_slug"):
+            errors = int((group["has_error"].astype(str) == "True").sum())
+            pending = set(group["NISN"]) - uploaded_nisns(submit_dir, slug)
+            out.append([group["Nama Sekolah"].iloc[0], group["source_file"].nunique(), len(group), errors, "held" if errors else ("uploaded" if not pending else "ready")])
+        return pd.DataFrame(out, columns=SCHOOL_COLUMNS).sort_values("school", key=lambda s: s.str.lower())
     status_path = standardized / "status.csv"
     if not status_path.exists():
         return pd.DataFrame(columns=SCHOOL_COLUMNS)

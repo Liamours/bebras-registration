@@ -140,3 +140,35 @@ def test_an_alias_that_differs_from_the_canonical_name_matches():
     master = MASTER.assign(aliases=["Pacet Satu", "", ""])
     found, _ = schools.lookup("Pacet Satu", master)
     assert found["npsn"] == "20200001"
+
+
+def test_a_name_ending_in_a_city_is_also_narrowed_by_the_typed_city():
+    none, suggestions = schools.lookup("SDN 1 Bandung", SHARED, city="Kabupaten Bandung")  # the end of the name allows both, the typed city picks one
+    assert none is None or none["npsn"] == "30000002"
+    found, _ = schools.lookup("SDN 1 Bandung", SHARED, city="Kabupaten Bandung")
+    assert found is not None and found["npsn"] == "30000002"
+
+
+def test_a_school_outside_the_four_regions_gets_the_typed_city_read_like_an_unknown_school():
+    table, review = schools.canonicalize(students(["SMA Islam Serang", "Bandung"], ["SMA Islam Serang", "Kab. Bandung Barat"]), MASTER)
+    assert list(table["Kota/Kabupaten"]) == ["Bandung", "Kabupaten Bandung Barat"]
+    assert [(r["check"], r["value"], r["suggestions"]) for _, r in review.iterrows()] == [("region_ambiguous", "Bandung", "Kota Bandung | Kabupaten Bandung")]
+
+
+@pytest.mark.parametrize(
+    "typed, expected",
+    [
+        ("KBB", ("Kabupaten Bandung Barat",)),
+        ("Kab. Bdg", ("Kabupaten Bandung",)),
+        ("Kota Bdg", ("Kota Bandung",)),
+        ("Kota Bandung Barat", ("Kabupaten Bandung Barat",)),  # Bandung Barat is a Kabupaten
+        ("Bandungan", ()),
+        ("Kabupaten Bandung, Jawa Barat", ("Kabupaten Bandung",)),
+    ],
+)
+def test_typed_city_variants(typed, expected):
+    assert schools.regions_of(typed) == expected
+
+
+def test_the_state_prefix_may_be_followed_by_a_hyphen():
+    assert schools.canonical("SMPN-1 Pacet") == "SMP Negeri 1 Pacet"

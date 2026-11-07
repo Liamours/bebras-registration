@@ -53,7 +53,7 @@ tests/                   tests on invented rows
 docs/                    routine, pipeline, rules per field, template, reply texts
 ```
 
-All paths, thresholds and value lists live in `configs/default.yaml`. Nothing is hardcoded in the code.
+Paths, thresholds, column lists and value lists live in `configs/default.yaml`. The code holds the fixed spelling lists of school names and person names (`schools.py`, `fields.py`) and the layout of the website's upload file.
 
 ## Data
 

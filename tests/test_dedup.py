@@ -88,3 +88,50 @@ def test_assigned_keys_live_in_the_reference_state_file(make_workbook, cfg, repl
     process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None)])
     deduplicate(cfg)
     assert cfg["paths"]["assigned_keys"].exists() and "telkomuniversity_00001" in cfg["paths"]["assigned_keys"].read_text(encoding="utf-8")
+
+
+def test_a_resent_file_with_shifted_rows_or_a_new_name_keeps_the_key_of_the_student(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, **{"Nama Lengkap": "Ani Satu"})])
+    first = deduplicate(cfg)[0].iloc[0]["NISN"]
+    process(make_workbook, cfg, replies, "b.xlsx", [row(NISN=3000000005, **{"Nama Lengkap": "Budi Dua"}), row(NISN=None, **{"Nama Lengkap": "ANI SATU"})])  # another name, another row
+    again, report = deduplicate(cfg)
+    assert first == "telkomuniversity_00001"
+    assert list(report["check"]) == ["same_key_in_school"] * 2 and set(report["key_or_name"]) == {first}  # the resent student got the old key, so it is found as the same student
+    assert sorted(again["Nama Lengkap"]) == ["Ani Satu", "Budi Dua"]
+
+
+def test_a_row_without_errors_wins_over_a_fuller_row_with_an_error(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(Kelas=99, **{"Nama Lengkap": "Ani Satu"}), row(Email=None, **{"Nama Lengkap": "Ani Satu"})])
+    students, _ = deduplicate(cfg)
+    assert len(students) == 1 and not students.iloc[0]["has_error"]
+
+
+def test_a_school_name_shared_by_several_schools_is_held_and_never_cut_into_one_of_them(make_workbook, cfg, replies, row):
+    pd.DataFrame([["sd_negeri_1", "SD Negeri 1", "1", "SD", "Kota Bandung", ""], ["sd_negeri_1_2", "SD Negeri 1", "2", "SD", "Kabupaten Bandung", ""]],
+                 columns=["school_slug", "canonical_name", "npsn", "jenjang", "region", "aliases"]).to_csv(cfg["paths"]["school_master"], index=False)
+    process(make_workbook, cfg, replies, "a.xlsx", [row(**{"Nama Sekolah": "SDN 1", "Kota/Kabupaten": "Bandung"})])
+    students, _ = deduplicate(cfg)
+    assert students.iloc[0]["school_slug"] == "sd_negeri_1_ambiguous" and students.iloc[0]["has_error"]
+    review = pd.read_csv(cfg["paths"]["deduplicated"] / "school_review.csv", dtype=str)
+    assert "school_ambiguous" in set(review["check"])
+
+
+def test_nothing_to_process_removes_the_old_deduplicated_table(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row()])
+    deduplicate(cfg)
+    assert (cfg["paths"]["deduplicated"] / "students.csv").exists()
+    (cfg["paths"]["standardized"] / "status.csv").unlink()
+    deduplicate(cfg)
+    assert not (cfg["paths"]["deduplicated"] / "students.csv").exists()
+
+
+def test_a_resent_file_with_an_inserted_row_never_gives_two_students_one_key(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, **{"Nama Lengkap": "Ani Satu"})])
+    deduplicate(cfg)
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, **{"Nama Lengkap": "Baru Dua"}), row(NISN=None, **{"Nama Lengkap": "Ani Satu"})])  # a row inserted above, same file name
+    cfg["paths"]["overrides"].write_text("source_file,row,column,new_value,reason\n", encoding="utf-8")
+    process_file(cfg["paths"]["standardized"].parent / "a.xlsx", cfg, replies, cfg["paths"]["standardized"])
+    students, report = deduplicate(cfg)
+    keys = dict(zip(students["Nama Lengkap"], students["NISN"]))
+    assert len(students) == 2 and len(set(keys.values())) == 2 and keys["Ani Satu"] == "telkomuniversity_00001"  # Ani keeps her key, the new student gets the next one
+    assert report.empty

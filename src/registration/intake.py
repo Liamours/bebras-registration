@@ -84,13 +84,15 @@ def run(cfg: dict, sheet_csv: str, *, fetch: bool = False, fetcher: Fetcher = ht
     target = Path(ic["target_dir"])
     state_path = Path(ic["state_file"])
     state = read_state(state_path)
-    new = list_new(pd.read_csv(io.StringIO(sheet_csv), dtype=str).fillna(""), cfg, state)
+    fresh = list_new(pd.read_csv(io.StringIO(sheet_csv), dtype=str).fillna(""), cfg, state)
     results = []
-    for _, r in new.iterrows():
+    for _, r in fresh.iterrows():
         result = {"file_id": r["file_id"], "school": r[c["school"]], "timestamp": r[c["timestamp"]], "outcome": "new"}
         if fetch:
             try:
                 data, headers = fetcher(DOWNLOAD_URL.format(id=r["file_id"]))
+                if len(data) >= MAX_BYTES:
+                    raise ValueError("file larger than the size limit")
                 if data[:2] != b"PK":
                     raise ValueError("not an xlsx file (the link may need a sign-in or is not shared)")
                 target.mkdir(parents=True, exist_ok=True)
