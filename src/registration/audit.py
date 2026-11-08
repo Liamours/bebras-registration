@@ -23,6 +23,7 @@ JENJANG_SITE = {"Preschool", "SD", "MTI", "SMP", "MTs", "SMA", "MA", "SMK", "MAK
 JENJANG_KELAS = {"Preschool": (0, 0), "SD": (1, 6), "MTI": (1, 6), "SMP": (7, 9), "MTs": (7, 9), "SMA": (10, 12), "SMK": (10, 12), "MA": (10, 12), "MAK": (10, 12)}
 REGIONS = {"Kota Bandung", "Kabupaten Bandung", "Kabupaten Bandung Barat", "Kota Cimahi"}
 SCHOOL_ABBREVIATIONS = {"negeri", "swasta", "smpn", "sman", "smkn", "sdit", "smpit", "smait", "mtsn", "madrasah", "sekolah", "dasar", "menengah", "pertama", "atas", "kejuruan"}  # words the school-name rule rewrites
+PLACE_WORDS = {"bandung", "cimahi", "kota", "kabupaten", "barat"}  # the master list leaves the place out of the name when the region column holds it
 PARTICLES = {"bin", "binti", "bte", "van", "de", "der", "di", "da", "von", "ibn", "al", "el"}
 
 
@@ -74,7 +75,7 @@ def explain(col: str, raw: str, site: str) -> str | None:
             return "region spelling"
         return "region of the school" if letters(raw) == "bandung" and site in REGIONS else None
     if col == "Nama Sekolah":
-        words = [w for w in re.findall(r"[a-z]{4,}", raw.casefold()) if w not in SCHOOL_ABBREVIATIONS]
+        words = [w for w in re.findall(r"[a-z]{4,}", raw.casefold()) if w not in SCHOOL_ABBREVIATIONS | PLACE_WORDS]
         same_numbers = re.findall(r"\d+", raw) == re.findall(r"\d+", site)
         return "school name rule" if same_numbers and all(w in site.casefold() for w in words) else None
     if col == "Kategori":
@@ -126,6 +127,10 @@ def audit(cfg: dict, site_path: Path) -> pd.DataFrame:
     ov = pd.read_csv(cfg["paths"]["overrides"], dtype=str).fillna("") if cfg["paths"]["overrides"].exists() else pd.DataFrame(columns=["source_file", "row", "column", "new_value", "reason", "student"])
     overrides = {(r["source_file"], int(r["row"]), r["column"]): r["new_value"] for _, r in ov.iterrows() if r["row"].isdigit()}
     dropped = {(f, r) for (f, r, c), v in overrides.items() if v == "__drop__"}
+    duplicates_path = cfg["paths"]["deduplicated"] / "duplicates.csv"
+    if duplicates_path.exists():  # a row that dedup dropped because an earlier or fuller row holds the same key is covered by that row
+        dup = pd.read_csv(duplicates_path, dtype=str).fillna("")
+        dropped |= {(f, int(r)) for f, r in zip(dup.loc[dup["kept"] == "no", "source_file"], dup.loc[dup["kept"] == "no", "source_row"])}
     examples = set(cfg["template_example_names"])
     student_columns = [c for c in cfg["columns"] if c != "No"]
 
