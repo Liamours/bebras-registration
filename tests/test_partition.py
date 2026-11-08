@@ -182,3 +182,11 @@ def test_school_status_from_the_deduplicated_table_agrees_with_partition(tmp_pat
                             columns=["school_slug", "Nama Sekolah", "NISN", "has_error", "source_file"])
     table = school_status(tmp_path, tmp_path, slugify, students)
     assert dict(zip(table["school"], table["state"])) == {"SMP A": "ready", "SMP B": "held"}  # a key given to a student without a NISN is no error
+
+
+def test_a_lock_file_of_an_open_upload_file_does_not_stop_the_run(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001)])
+    cut(cfg, stamp=STAMP1)
+    folder = cfg["paths"]["submit_ready"] / "smp_contoh"
+    (folder / "~$smp_contoh-lock.xlsx").write_bytes(b"lock")
+    assert state(cut(cfg, stamp=STAMP2), "SMP Contoh")["state"] == "nothing_new"

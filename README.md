@@ -30,7 +30,8 @@ Run everything through the project environment with `uv run`. Packages are added
 
 ```bash
 uv run python -m registration standardize <workbook or folder>
-uv run python -m registration partition [--kategori SiKecil,Siaga]
+uv run python -m registration partition [--kategori SiKecil,Siaga] [--school <slug>] [--exclude-sesi B1] [--resend-sesi G1]
+uv run python -m registration audit [--export <table exported from the site>]
 uv run python -m registration status
 uv run python -m registration mark-uploaded <upload file>...
 uv run python -m registration intake --sheet-url <link> [--fetch]

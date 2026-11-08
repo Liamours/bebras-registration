@@ -49,7 +49,7 @@ def write_upload(path: Path, rows: pd.DataFrame, header: list[str], null: str) -
 
 def earlier_nisns(folder: Path) -> set[str]:
     found: set[str] = set()
-    for f in folder.glob("*.xlsx"):
+    for f in (p for p in folder.glob("*.xlsx") if not p.name.startswith("~$")):  # an upload file open in Excel leaves a lock file
         ws = openpyxl.load_workbook(f, read_only=True).worksheets[0]
         found |= {str(r[2]) for r in ws.iter_rows(min_row=2, values_only=True) if r[2]}
     return found

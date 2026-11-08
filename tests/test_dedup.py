@@ -177,3 +177,18 @@ def test_an_empty_keys_file_is_read_as_no_state_and_is_written_whole(make_workbo
     students, _ = deduplicate(cfg)
     assert list(students["NISN"]) == ["telkomuniversity_00001"]
     assert not cfg["paths"]["assigned_keys"].with_suffix(".tmp").exists() and cfg["paths"]["assigned_keys"].stat().st_size > 0
+
+
+def test_the_same_student_twice_with_different_values_is_held_not_decided_by_file_order(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(Email="old@example.com", **{"Nama Lengkap": "Ani Satu"})])
+    process(make_workbook, cfg, replies, "b.xlsx", [row(Email="new@example.com", **{"Nama Lengkap": "Ani Satu"})])
+    students, report = deduplicate(cfg)
+    assert len(students) == 2 and students["has_error"].all()
+    assert list(report["check"]) == ["same_key_conflicting_values"] * 2 and "Email" in report.iloc[0]["reason"]
+
+
+def test_a_row_without_a_name_gets_no_bureau_key(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=None, **{"Nama Lengkap": "Ani Satu"}), row(NISN=None, **{"Nama Lengkap": None})])
+    students, _ = deduplicate(cfg)
+    keys = dict(zip(students["Nama Lengkap"], students["NISN"]))
+    assert keys["Ani Satu"] == "telkomuniversity_00001" and "telkomuniversity_00002" not in set(students["NISN"])

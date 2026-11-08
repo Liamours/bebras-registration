@@ -27,7 +27,7 @@ def uploaded_nisns(submit_dir: Path, slug: str) -> set[str]:
         return set()
     done = set(pd.read_csv(log, dtype=str)["file"])
     found: set[str] = set()
-    for f in (submit_dir / slug).glob("*.xlsx"):
+    for f in (p for p in (submit_dir / slug).glob("*.xlsx") if not p.name.startswith("~$")):
         if f.name in done:
             ws = openpyxl.load_workbook(f, read_only=True).worksheets[0]
             found |= {str(r[2]) for r in ws.iter_rows(min_row=2, values_only=True) if r[2]}

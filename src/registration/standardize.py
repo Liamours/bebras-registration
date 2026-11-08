@@ -108,7 +108,8 @@ def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Is
             flag("Email", r["Email"], "missing_value", "missing", "warning")
         else:
             cleaned["Email"], found = clean_email(r["Email"])
-            notes("Email", r["Email"], found)
+            for code, reason in found:  # an address that cannot be delivered holds the school, like any value we cannot use
+                flag("Email", r["Email"], code, reason, "error" if code == "invalid_email" else "warning")
         if blank(r["No Kontak Pendamping"]):
             cleaned["No Kontak Pendamping"] = nul
             flag("No Kontak Pendamping", r["No Kontak Pendamping"], "missing_value", "missing", "warning")

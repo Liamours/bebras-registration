@@ -13,6 +13,8 @@ codes:
   missing_name: "Nama lengkap siswa belum diisi, {rows}."
   missing_school: "Nama sekolah belum diisi, {rows}."
   missing_nisn: "NISN belum diisi, {rows}. Jika siswa sudah memiliki NISN, mohon kirimkan 10 digit angkanya. Jika belum, panitia memberi kode sementara."
+  missing_column: "Kolom {column} tidak ada pada file, jadi isiannya kosong untuk semua siswa. Mohon gunakan templat terbaru dan jangan menghapus judul kolom."
+  invalid_email: "Alamat email tidak valid, {rows}. Mohon periksa penulisannya, atau kosongkan jika siswa belum punya email."
   nisn_format: "NISN harus 10 digit angka dan diformat sebagai teks agar angka 0 di depan tidak hilang, {rows}."
   unknown_value: "Isian pada kolom {column} tidak sesuai pilihan yang tersedia, {rows}."
   kelas_invalid: "Kelas belum diisi atau bukan angka 0 sampai 12, {rows}."
