@@ -34,3 +34,4 @@ Row numbers in a message are the row numbers the sender sees in Excel. Only erro
 | `sesi_category` | Sesi is not available for the student's category. | Sesi tidak tersedia untuk kategorinya, {rows} (sesi E tidak tersedia untuk SiKecil; sesi A1 sampai I1 hanya untuk Penggalang). |
 | `missing_column` | A column is missing from the file, so every row is held. `{column}` names it. | Kolom {column} tidak ada pada file, jadi isiannya kosong untuk semua siswa. Mohon gunakan templat terbaru dan jangan menghapus judul kolom. |
 | `invalid_email` | An email address is not valid. | Alamat email tidak valid, {rows}. Mohon periksa penulisannya, atau kosongkan jika siswa belum punya email. |
+| `phone_sequence` | The companion phones of several students count up by one. | Nomor kontak pendamping untuk beberapa siswa bertambah satu per baris, {rows}. Mohon kirimkan nomor pendamping yang benar. |

@@ -171,3 +171,14 @@ def normalize_values(df: pd.DataFrame, cfg: dict) -> tuple[pd.DataFrame, list[Is
 
         rows.append(cleaned)
     return pd.DataFrame(rows, columns=cfg["columns"] + META), issues
+
+
+def phone_sequences(table: pd.DataFrame, null: str) -> list[Issue]:
+    """Rows whose companion phones count up by one (Excel's fill handle): at most the first is real, so every row is held."""
+    issues = []
+    for (_, companion), group in table.groupby(["Nama Sekolah", "Nama Pendamping"]):
+        phones = sorted({int(p) for p in group["No Kontak Pendamping"] if str(p).isdigit()})
+        if len(phones) >= 3 and all(b - a == 1 for a, b in zip(phones, phones[1:])):
+            issues += [Issue(r["source_file"], int(r["source_row"]), "No Kontak Pendamping", str(r["No Kontak Pendamping"]), "the companion phones of several students count up by one: ask for the real number", "error", "phone_sequence")
+                       for _, r in group.iterrows()]
+    return issues
