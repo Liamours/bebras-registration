@@ -140,3 +140,10 @@ school_source:
   forms:
     dikdas: {SD: 5, SMP: 6, MI: 9, MTs: 10}
     dikmen: {SMA: 13, SMK: 15, MA: 16, MAK: 17}
+
+# the account handout of each companion (teacher or parent): `registration handout`
+handout:
+  folder: handout                       # inside the accounts folder, one dated subfolder per run
+  site_url: https://tantanganbebras.ipb.ac.id
+  title: Akun Peserta Bebras Indonesia Challenge 2026
+  intro: "Berikut username dan password peserta yang Bapak/Ibu dampingi. Peserta masuk melalui {site_url}."

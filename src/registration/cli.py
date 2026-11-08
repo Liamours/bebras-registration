@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import pandas as pd
 
-from registration import audit as audit_mod, dedup, lineage as lineage_mod, intake, partition as partition_mod, report as report_mod, schools, school_source, status
+from registration import audit as audit_mod, dedup, handout as handout_mod, lineage as lineage_mod, intake, partition as partition_mod, report as report_mod, schools, school_source, status
 from registration.pipeline import is_done, output_clashes, process_file
 from registration.replies import load_replies
 
@@ -153,6 +153,12 @@ def cmd_lineage(args, cfg):
         print(table.assign(step=table["raw_to_final"].str.split(":").str[0].replace("", "-")).groupby(["field", "step"]).size().to_string())
 
 
+def cmd_handout(args, cfg):
+    export = args.export or max((cfg["paths"]["accounts"]).glob("manajemen_siswa_bebrasweb-*.csv"), key=lambda p: p.name)
+    out, companions, students = handout_mod.make_handouts(cfg, export)
+    print(f"handout from {export.name}: {companions} companions, {students} students, an Excel file and a PDF each, in {out}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="registration", description="Registration workbooks: standardize, partition, status, intake.")
     parser.add_argument("--config", type=Path, default=ROOT / "configs" / "default.yaml")
@@ -199,6 +205,10 @@ def main() -> None:
     p = sub.add_parser("lineage", help="per student and field: the sender's cell, the uploaded file, our final value and the site, with the reason of each step")
     p.add_argument("--export", type=Path, help="table exported from the site (default: the newest in the accounts folder)")
     p.set_defaults(func=cmd_lineage)
+
+    p = sub.add_parser("handout", help="one Excel file and one PDF per companion (teacher or parent) with the usernames and passwords of their students")
+    p.add_argument("--export", type=Path, help="table exported from the site (default: the newest in the accounts folder)")
+    p.set_defaults(func=cmd_handout)
 
     p = sub.add_parser("intake", help="list new submissions from the response sheet; --fetch downloads them")
     p.add_argument("--sheet-url", help="link of the response sheet (or set REGISTRATION_SHEET_URL)")
