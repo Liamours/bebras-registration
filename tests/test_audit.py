@@ -143,3 +143,16 @@ def test_companion_phones_counting_up_by_one_on_the_site_are_absurd(make_workboo
     std = prepare(make_workbook, cfg, replies, row, rows=rows)
     issues = audit(cfg, export(cfg, std))
     assert list(issues["check"]) == ["absurd"] * 3 and set(issues["why"]) == {"the companion phones of several students count up by one"}
+
+
+def test_a_row_that_dedup_dropped_for_a_fuller_row_with_the_same_key_is_covered(make_workbook, cfg, replies, row):
+    prepare(make_workbook, cfg, replies, row)
+    process_file(make_workbook("b.xlsx", [row(**{"Nama Lengkap": "Ani Satu", "NISN": 3000000001})]), cfg, replies, cfg["paths"]["standardized"])
+    std = deduplicate(cfg)[0]
+    assert "raw_row_lost" not in checks(audit(cfg, export(cfg, std)))
+
+
+def test_a_school_name_may_lose_the_place_that_the_region_column_holds():
+    from registration.audit import explain
+    assert explain("Nama Sekolah", "SMPN 99 CONTOH BANDUNG", "SMP Negeri 99 Contoh") == "school name rule"
+    assert explain("Nama Sekolah", "SMPN 98 CONTOH BANDUNG", "SMP Negeri 99 Contoh") is None
