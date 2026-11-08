@@ -88,6 +88,27 @@ Read `partition_report.csv` after every run. `written` is a new upload file; `he
 - To rebuild a file, delete it, fix the cause, and run `partition` again. Students already in another file of that school are left out, so a rebuilt file must be the only one that holds them.
 - Check an upload file once in Excel before the first upload: header in row 1, NISN and phone as text, no example or instruction rows.
 
+## Audit of our own work
+
+```bash
+uv run python -m registration audit
+uv run python -m registration audit --export <table exported from the site>
+```
+
+`audit` compares the student table of the website with the senders' original cells and exits with 1 on any error. A sender's typo passes; what we did must be explained. The lines of the report (`data/accounts/verification/audit-<stamp>.csv`) have these checks:
+
+| Check | Meaning |
+|---|---|
+| `raw_row_lost` | A sender row with data is neither on the site nor dropped for a stated reason (template example, drop override) |
+| `missing_on_site`, `site_extra`, `repeated_on_site`, `count` | A student of the files is missing, a student on the site has no sender row, a name or username is repeated, the counts differ |
+| `unexplained_change` | A cell differs from the sender's and is neither a format change, a listed override nor a rule that keeps the meaning (Kelas number, Gender vocabulary, Sesi label, phone format, Jenjang list, region, school-name rule, Bahasa vocabulary) |
+| `override_not_on_site` | The site does not hold the value of an override |
+| `absurd` | A value on the site that cannot be right: digits in a name, a lower-case word, a capital after an apostrophe, a Kelas outside the template, a Kategori, Jenjang or Sesi that does not fit, a NISN that is not 10 digits or a bureau code or repeats, an invalid email or phone |
+| `record` | An override without a reason or student, or a file marked uploaded without a verified line in the upload log |
+| `held` | A student with an error is not uploaded yet (a warning) |
+
+Run it after every upload and before accounts go to a CP. A new rule that changes a value needs a matching rule in `audit.py`, so the audit never accepts a change it cannot explain.
+
 ## Common situations
 
 | Situation | Reason | What to do |
