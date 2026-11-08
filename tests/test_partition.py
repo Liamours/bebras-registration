@@ -190,3 +190,11 @@ def test_a_lock_file_of_an_open_upload_file_does_not_stop_the_run(make_workbook,
     folder = cfg["paths"]["submit_ready"] / "smp_contoh"
     (folder / "~$smp_contoh-lock.xlsx").write_bytes(b"lock")
     assert state(cut(cfg, stamp=STAMP2), "SMP Contoh")["state"] == "nothing_new"
+
+
+def test_named_students_go_up_again_after_a_correction_and_the_others_do_not(make_workbook, cfg, replies, row):
+    process(make_workbook, cfg, replies, "a.xlsx", [row(NISN=3000000001, **{"Nama Lengkap": "Ani Satu"}), row(NISN=3000000002, **{"Nama Lengkap": "Budi Dua"})])
+    cut(cfg, stamp=STAMP1)
+    again = state(cut(cfg, stamp=STAMP2, resend_nisn=["3000000002"]), "SMP Contoh")
+    rows, _ = read_upload(cfg["paths"]["submit_ready"] / "smp_contoh" / again["file"])
+    assert again["rows"] == 1 and [r[1] for r in rows[1:]] == ["Budi Dua"]

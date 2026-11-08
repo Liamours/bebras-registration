@@ -13,6 +13,7 @@ paths:
   assigned_keys: ../../data/reference/assigned_keys.csv
   accounts: ../../data/accounts
   audit: ../../audit
+  lineage: ../../data/lineage
 
 null_value: "-"
 

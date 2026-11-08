@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 import pandas as pd
 
-from registration import audit as audit_mod, dedup, intake, partition as partition_mod, report as report_mod, schools, school_source, status
+from registration import audit as audit_mod, dedup, lineage as lineage_mod, intake, partition as partition_mod, report as report_mod, schools, school_source, status
 from registration.pipeline import is_done, output_clashes, process_file
 from registration.replies import load_replies
 
@@ -94,7 +94,8 @@ def cmd_partition(args, cfg):
     dedup.deduplicate(cfg)  # the upload files are always cut from a fresh deduplicated table
     report = partition_mod.partition(cfg, args.kategori.split(",") if args.kategori else None, exclude_sesi=args.exclude_sesi.split(",") if args.exclude_sesi else None,
                                       only_schools=args.school.split(",") if args.school else None,
-                                      resend_sesi=args.resend_sesi.split(",") if args.resend_sesi else None)
+                                      resend_sesi=args.resend_sesi.split(",") if args.resend_sesi else None,
+                                      resend_nisn=args.resend_nisn.split(",") if args.resend_nisn else None)
     print(report["state"].value_counts().to_string() if not report.empty else "no checked files")
     held = report[report["state"] == "held"]
     for _, r in held.iterrows():
@@ -141,6 +142,17 @@ def cmd_audit(args, cfg):
     raise SystemExit(1 if (issues["severity"] == "error").any() else 0)
 
 
+def cmd_lineage(args, cfg):
+    export = args.export or max((cfg["paths"]["accounts"]).glob("manajemen_siswa_bebrasweb-*.csv"), key=lambda p: p.name)
+    table = lineage_mod.lineage(cfg, export)
+    out = cfg["paths"]["lineage"] / f"lineage-{datetime.now():%Y%m%d-%H%M}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(out, index=False, encoding="utf-8")
+    print(f"lineage against {export.name}: {len(table)} changed cells of {table[['source_file', 'source_row']].drop_duplicates().shape[0]} students, report {out}")
+    if len(table):
+        print(table.assign(step=table["raw_to_final"].str.split(":").str[0].replace("", "-")).groupby(["field", "step"]).size().to_string())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="registration", description="Registration workbooks: standardize, partition, status, intake.")
     parser.add_argument("--config", type=Path, default=ROOT / "configs" / "default.yaml")
@@ -168,6 +180,7 @@ def main() -> None:
     p = sub.add_parser("partition", help="write one upload file per school from the checked tables")
     p.add_argument("--kategori", help="only these categories, comma separated (for example SiKecil,Siaga)")
     p.add_argument("--resend-sesi", help="include the students of these Sesi again although an earlier file holds them (after their Sesi was changed and the old accounts were deleted on the site)")
+    p.add_argument("--resend-nisn", help="include the students with these NISN again although an earlier file holds them (after a value of theirs that the site cannot edit was corrected and their old accounts were deleted)")
     p.add_argument("--school", help="only these school slugs, comma separated (for example smp_contoh)")
     p.add_argument("--exclude-sesi", help="leave the students of these Sesi out, comma separated (for example B1); they go up later in a file of their own")
     p.set_defaults(func=cmd_partition)
@@ -182,6 +195,10 @@ def main() -> None:
     p = sub.add_parser("audit", help="check the student table of the site against the senders' cells; exit 1 on any error of ours")
     p.add_argument("--export", type=Path, help="table exported from the site (default: the newest in the accounts folder)")
     p.set_defaults(func=cmd_audit)
+
+    p = sub.add_parser("lineage", help="per student and field: the sender's cell, the uploaded file, our final value and the site, with the reason of each step")
+    p.add_argument("--export", type=Path, help="table exported from the site (default: the newest in the accounts folder)")
+    p.set_defaults(func=cmd_lineage)
 
     p = sub.add_parser("intake", help="list new submissions from the response sheet; --fetch downloads them")
     p.add_argument("--sheet-url", help="link of the response sheet (or set REGISTRATION_SHEET_URL)")
