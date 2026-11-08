@@ -1,5 +1,6 @@
 import argparse
 import os
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -7,7 +8,7 @@ from tqdm import tqdm
 
 import pandas as pd
 
-from registration import dedup, intake, partition as partition_mod, report as report_mod, schools, school_source, status
+from registration import audit as audit_mod, dedup, intake, partition as partition_mod, report as report_mod, schools, school_source, status
 from registration.pipeline import is_done, output_clashes, process_file
 from registration.replies import load_replies
 
@@ -128,6 +129,18 @@ def cmd_intake(args, cfg):
         print("listing only; add --fetch to download")
 
 
+def cmd_audit(args, cfg):
+    export = args.export or max((cfg["paths"]["accounts"]).glob("manajemen_siswa_bebrasweb-*.csv"), key=lambda p: p.name)
+    issues = audit_mod.audit(cfg, export)
+    out = cfg["paths"]["accounts"] / "verification" / f"audit-{datetime.now():%Y%m%d-%H%M}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    issues.to_csv(out, index=False, encoding="utf-8")
+    print(f"audit of {export.name}: {len(issues)} lines, report {out}")
+    if len(issues):
+        print(issues.groupby(["check", "severity"]).size().to_string())
+    raise SystemExit(1 if (issues["severity"] == "error").any() else 0)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="registration", description="Registration workbooks: standardize, partition, status, intake.")
     parser.add_argument("--config", type=Path, default=ROOT / "configs" / "default.yaml")
@@ -165,6 +178,10 @@ def main() -> None:
     p = sub.add_parser("mark-uploaded", help="record that upload files went to the website")
     p.add_argument("files", nargs="+", help="upload file names, for example school-20261105-1200.xlsx")
     p.set_defaults(func=cmd_mark_uploaded)
+
+    p = sub.add_parser("audit", help="check the student table of the site against the senders' cells; exit 1 on any error of ours")
+    p.add_argument("--export", type=Path, help="table exported from the site (default: the newest in the accounts folder)")
+    p.set_defaults(func=cmd_audit)
 
     p = sub.add_parser("intake", help="list new submissions from the response sheet; --fetch downloads them")
     p.add_argument("--sheet-url", help="link of the response sheet (or set REGISTRATION_SHEET_URL)")
