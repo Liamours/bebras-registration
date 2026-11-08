@@ -70,6 +70,7 @@ def test_email_is_lowercased_and_checked():
     assert clean_email(" Andi.Test@Example.COM ") == ("andi.test@example.com", [])
     assert [c for c, _ in clean_email("andi.example.com")[1]] == ["invalid_email"]
     assert clean_email("andi@gmial.com") == ("andi@gmail.com", [("email_domain_fixed", "domain @gmial.com read as @gmail.com")])
+    assert clean_email("andi@gmal.com") == ("andi@gmail.com", [("email_domain_fixed", "domain @gmal.com read as @gmail.com")])
     email, notes = clean_email("a@example.com; b@example.com")
     assert email == "a@example.com" and [c for c, _ in notes] == ["email_multiple"]
 

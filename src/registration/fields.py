@@ -10,7 +10,7 @@ import pandas as pd
 EMAIL = re.compile(r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 EMAIL_LOCAL_MAX, EMAIL_MAX = 64, 254
 EMAIL_DOMAIN_TYPOS = {
-    "gmial.com": "gmail.com", "gmai.com": "gmail.com", "gamil.com": "gmail.com", "gmail.con": "gmail.com",
+    "gmial.com": "gmail.com", "gmal.com": "gmail.com", "gmai.com": "gmail.com", "gamil.com": "gmail.com", "gmail.con": "gmail.com",
     "gmail.co": "gmail.com", "gmail.cm": "gmail.com", "yahoo.co": "yahoo.com", "yaho.com": "yahoo.com",
 }
 # degrees that are removed from a student's name; the dot after S or M is required so that an initial such as "M. Ali" stays
