@@ -58,7 +58,7 @@ Rejection is for structure only, because a file with many bad rows usually has o
 
 ## Report
 
-`report` writes `deduplicated/statistics.csv` (metric, group, value) and `statistics.txt` and prints the summary: schools and students, students per jenjang, kategori, region and Sesi, files received, flagged, rejected and held, and schools held. A school is held when one of its students has an error, a file is held when it has such a student.
+`report` writes `deduplicated/statistics.csv` (metric, group, value) and `statistics.txt` and prints the summary: schools and students, students per jenjang, kategori, region and Sesi, companions per status (one per school and name, case and punctuation ignored), files received, flagged, rejected and held, and schools held. A school is held when one of its students has an error, a file is held when it has such a student.
 
 ## 3. Partition
 

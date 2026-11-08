@@ -5,9 +5,9 @@ from registration import report
 from registration.cli import cmd_report
 
 STUDENTS = pd.DataFrame(
-    [["a", "SMP", "Penggalang", "Kota Bandung", "A", "False", "a.xlsx"], ["a", "SMP", "Penggalang", "Kota Bandung", "B", "False", "a.xlsx"],
-     ["b", "SMA", "Penegak", "other", "A", "True", "b.xlsx"], ["c", "SMA", "Penegak", "other", "A", "False", "c.xlsx"]],
-    columns=["school_slug", "Jenjang Sekolah", "Kategori", "Kota/Kabupaten", "Sesi", "has_error", "source_file"],
+    [["a", "SMP", "Penggalang", "Kota Bandung", "A", "False", "a.xlsx", "Ibu Contoh", "Guru"], ["a", "SMP", "Penggalang", "Kota Bandung", "B", "False", "a.xlsx", "IBU  CONTOH.", "Guru"],
+     ["b", "SMA", "Penegak", "other", "A", "True", "b.xlsx", "Bapak Contoh", "Guru"], ["c", "SMA", "Penegak", "other", "A", "False", "c.xlsx", "Ibu Contoh", "Orang Tua"]],
+    columns=["school_slug", "Jenjang Sekolah", "Kategori", "Kota/Kabupaten", "Sesi", "has_error", "source_file", "Nama Pendamping", "Status Pendamping"],
 )
 FILES = pd.DataFrame({"status": ["ok", "ok", "flagged", "rejected"]})
 
@@ -18,6 +18,7 @@ def test_statistics_count_schools_students_groups_files_and_held():
     assert value[("schools", "")] == 3 and value[("students", "")] == 4
     assert value[("students_per_jenjang", "SMP")] == 2 and value[("students_per_kategori", "Penegak")] == 2
     assert value[("students_per_region", "Kota Bandung")] == 2 and value[("students_per_sesi", "A")] == 3
+    assert (value[("companions_per_status", "Guru")], value[("companions_per_status", "Orang Tua")]) == (2, 1)  # one companion written two ways in one school counts once; the same name in another school and status counts again
     assert (value[("files_received", "")], value[("files_ok", "")], value[("files_flagged", "")], value[("files_rejected", "")]) == (4, 2, 1, 1)
     assert (value[("files_held", "")], value[("schools_held", "")]) == (1, 1)  # one student with an error holds its file and its school
     assert report.summary(table).startswith("3 schools, 4 students.") and "4 received, 1 flagged, 1 rejected, 1 held; 1 schools held" in report.summary(table)
