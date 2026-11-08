@@ -256,6 +256,12 @@ def audit(cfg: dict, site_path: Path) -> pd.DataFrame:
         for field, why in problems:
             add("absurd", "error", who, field, site=str(w.get(field, w.get("Nama Lengkap", ""))), why=why)
 
+    for (school, companion), group in site.groupby(["Sekolah", "Pendamping"]):  # Excel's fill handle makes phones count up by one: at most the first is real
+        phones = sorted({int(d) for d in group["No Kontak Pendamping"].map(lambda v: re.sub(r"\D", "", str(v))) if d})
+        if len(phones) >= 3 and all(b - a == 1 for a, b in zip(phones, phones[1:])):
+            for u in group["Username"]:
+                add("absurd", "error", u, "No Kontak Pendamping", site=str(group.set_index("Username").loc[u, "No Kontak Pendamping"]), why="the companion phones of several students count up by one")
+
     # 4 our own records
     for i, o in ov.iterrows():
         if not o["reason"].strip() or not o["student"].strip():

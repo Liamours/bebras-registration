@@ -136,3 +136,10 @@ def test_an_uploaded_file_that_disagrees_with_the_site_is_found_and_a_later_file
     wb.save(later)
     mark_uploaded(cfg["paths"]["submit_ready"], later.name)
     assert "upload_file_not_on_site" not in checks(audit(cfg, site))
+
+
+def test_companion_phones_counting_up_by_one_on_the_site_are_absurd(make_workbook, cfg, replies, row):
+    rows = [row(NISN=3000000001 + i, **{"Nama Lengkap": f"Siswa {n}", "No Kontak Pendamping": 81200000000 + i}) for i, n in enumerate(["Satu", "Dua", "Tiga"])]
+    std = prepare(make_workbook, cfg, replies, row, rows=rows)
+    issues = audit(cfg, export(cfg, std))
+    assert list(issues["check"]) == ["absurd"] * 3 and set(issues["why"]) == {"the companion phones of several students count up by one"}

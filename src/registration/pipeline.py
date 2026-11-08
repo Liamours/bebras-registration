@@ -9,7 +9,7 @@ from registration.readers import other_sheets, read_workbook, skipped_student_ro
 from registration.rejection import REJECT_CODES, error_share, structure_reasons
 from registration.replies import build_reply
 from registration.review import Issue, write_report
-from registration.standardize import drop_template_examples, normalize_values, rename_headers
+from registration.standardize import drop_template_examples, normalize_values, phone_sequences, rename_headers
 from registration.status import upsert_status
 
 
@@ -84,7 +84,7 @@ def process_file(path: Path, cfg: dict, replies: dict, out_dir: Path, accept_old
     header_issues = [i for i in header_issues if i.code != "missing_column" or i.column in alternatives] + row_missing
     skipped = skipped_student_rows(path)
     skipped_issues = [Issue(path.name, n, "Nama Lengkap", "", "row inside the instruction block looks like a student (it has an email) and was not read: review by hand", "warning", "skipped_student_row") for n in skipped]
-    issues: list[Issue] = header_issues + override_issues + example_issues + value_issues + sheet_issues + skipped_issues
+    issues: list[Issue] = header_issues + override_issues + example_issues + value_issues + phone_sequences(table, cfg["null_value"]) + sheet_issues + skipped_issues
     table.to_csv(out_dir / f"{path.stem}.csv", index=False, encoding="utf-8")
     write_report(issues, out_dir / f"{path.stem}.review.csv")
     share = error_share(table, issues)
