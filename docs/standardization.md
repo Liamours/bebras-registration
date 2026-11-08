@@ -9,8 +9,9 @@ Rule of thumb: fix what is certain (case, spacing, spelling variants from a list
 | Field | Rule |
 |---|---|
 | Student name (`Nama Lengkap`) | Spaces collapsed, stray characters removed (`name_chars`), text in brackets removed (`name_brackets`), academic degrees at the end and `Dr`, `Drs`, `Dra`, `Ir`, `Prof` at the start removed (`name_title_removed`) |
-| Case | A name in all capitals or all lower case becomes normal case (apostrophes and hyphens respected, roman numerals such as `III` kept). A name with mixed case is left as typed |
+| Case | A name in all capitals or all lower case becomes normal case (apostrophes and hyphens respected, roman numerals such as `III` kept). A name with mixed case is left as typed, except that a word starting in lower case is capitalized (`name_word_case`); particles such as `bin` and `al` stay |
 | Accompanying person (`Nama Pendamping`) | Same cleaning, degrees kept |
+| Changes listed in the review report, not asked | An email domain that is a known typo is corrected (`email_domain_fixed`, `gmial.com` to `gmail.com`); a Sesi copied as a label with its time is read as the letter (`sesi_label`); a NISN of 9 digits gets a leading zero (`nisn_padded`); a blank bureau column becomes our bureau (`default_filled`); a student-like row inside the instruction block is noted and not read (`skipped_student_row`); a workbook with more than one sheet is noted and only the first is read (`extra_sheets`); an override that is not applied because the row holds another student (`override_wrong_student`) or names no student (`override_no_student`) |
 | Reported, not changed | Digits in a name (`name_digits`), a single-word student name (`name_single_word`), a name converted from capitals that holds an apostrophe (`name_apostrophe`, the letter after it is written in lower case: Ma'ruf), an empty name after cleaning (`missing_name`, an error for a student) |
 
 Degrees are removed only when they match a list (`S.Pd`, `S.Kom`, `M.Pd`, ...) with the dot after S or M, so an initial such as `M. Ali` stays. Excel's escape for an invisible character (`_x0000_`) is removed.

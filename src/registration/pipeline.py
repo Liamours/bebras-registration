@@ -78,6 +78,10 @@ def process_file(path: Path, cfg: dict, replies: dict, out_dir: Path, accept_old
 
     sheets = other_sheets(path)
     sheet_issues = [Issue(path.name, None, "Sheet", ", ".join(sheets), f"the workbook has {len(sheets) + 1} sheets and only the first was read: review the other sheets by hand", "warning", "extra_sheets")] if sheets else []
+    # a column missing from the file holds every row of it, as a row error: an error without a row would let the school go up with the column blank
+    alternatives = {c for group in cfg["required_any"] if any(g not in {i.column for i in header_issues if i.code == "missing_column"} for g in group) for c in group}  # Kategori follows from Kelas
+    row_missing = [Issue(path.name, int(n), i.column, "", i.reason, "error", "missing_column") for i in header_issues if i.code == "missing_column" and i.column not in alternatives for n in table["source_row"]]
+    header_issues = [i for i in header_issues if i.code != "missing_column" or i.column in alternatives] + row_missing
     skipped = skipped_student_rows(path)
     skipped_issues = [Issue(path.name, n, "Nama Lengkap", "", "row inside the instruction block looks like a student (it has an email) and was not read: review by hand", "warning", "skipped_student_row") for n in skipped]
     issues: list[Issue] = header_issues + override_issues + example_issues + value_issues + sheet_issues + skipped_issues

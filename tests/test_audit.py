@@ -46,12 +46,12 @@ def test_a_site_that_holds_what_the_senders_wrote_passes(make_workbook, cfg, rep
 
 @pytest.mark.parametrize("change, expected", [
     ((0, "Nama Lengkap", "Ani Sartu"), ["count", "missing_on_site", "site_extra"]),  # a changed spelling is another student to the match by name
-    ((0, "Email", "other@example.com"), ["unexplained_change"]),
+    ((0, "Email", "other@example.com"), ["site_differs_from_files", "unexplained_change"]),
     ((0, "Kelas", "9"), ["unexplained_change"]),
     ((1, "Gender", "L"), ["unexplained_change"]),
-    ((0, "Sesi", "Z"), ["absurd", "unexplained_change"]),
-    ((0, "Jenjang", "MI"), ["absurd", "unexplained_change"]),
-    ((0, "Nama Lengkap", "ani satu"), ["absurd"]),  # lower case only: the same student, but it prints wrong
+    ((0, "Sesi", "Z"), ["absurd", "site_differs_from_files", "unexplained_change"]),
+    ((0, "Jenjang", "MI"), ["absurd", "site_differs_from_files", "unexplained_change"]),
+    ((0, "Nama Lengkap", "ani satu"), ["absurd", "site_differs_from_files"]),  # lower case only: the same student, but it prints wrong
     ((0, "Nama Lengkap", "Ani 2 Satu"), ["absurd", "count", "missing_on_site", "site_extra"]),
 ])
 def test_each_kind_of_mistake_is_named(make_workbook, cfg, replies, row, change, expected):
@@ -89,3 +89,50 @@ def test_a_file_marked_uploaded_needs_a_verified_line_in_the_log(make_workbook, 
     cfg["paths"]["audit"].mkdir()
     cfg["paths"]["audit"].joinpath("uploads.csv").write_text("uploaded_at,uploaded_by,school,file,students,issues,result,report\n", encoding="utf-8")
     assert "record" in checks(audit(cfg, export(cfg, std)))
+
+
+def test_the_site_must_match_our_own_files_in_case_where_the_sender_comparison_cannot_tell(make_workbook, cfg, replies, row):
+    std = prepare(make_workbook, cfg, replies, row)
+    issues = audit(cfg, export(cfg, std, change=(0, "Sekolah", "SMP CONTOH")))
+    assert checks(issues) == ["site_differs_from_files"] and list(issues["field"]) == ["Nama Sekolah"]
+
+
+def test_an_email_is_exact_and_a_listed_domain_typo_is_the_only_fix_that_passes(make_workbook, cfg, replies, row):
+    std = prepare(make_workbook, cfg, replies, row, rows=[row(Email="ani.satu@gmail.con", **{"Nama Lengkap": "Ani Satu", "NISN": 3000000001})])
+    assert std.iloc[0]["Email"] == "ani.satu@gmail.com"
+    assert checks(audit(cfg, export(cfg, std))) == []
+    assert "unexplained_change" in checks(audit(cfg, export(cfg, std, change=(0, "Email", "anisatu@gmail.com"))))
+
+
+def test_two_students_with_one_name_and_school_are_a_warning_and_not_an_error(make_workbook, cfg, replies, row):
+    rows = [row(NISN=3000000001, Kelas=7, Email="a@example.com", **{"Nama Lengkap": "Ani Satu"}), row(NISN=3000000002, Kelas=8, Email="b@example.com", **{"Nama Lengkap": "Ani Satu"})]
+    std = prepare(make_workbook, cfg, replies, row, rows=rows)
+    issues = audit(cfg, export(cfg, std))
+    assert set(issues["check"]) == {"homonym"} and set(issues["severity"]) == {"warning"}
+
+
+def test_an_uploaded_file_that_disagrees_with_the_site_is_found_and_a_later_file_replaces_it(make_workbook, cfg, replies, row):
+    import shutil
+
+    import openpyxl
+
+    from registration.partition import partition
+    from registration.status import mark_uploaded
+
+    std = prepare(make_workbook, cfg, replies, row)
+    first = partition(cfg, stamp="20261105-1000").iloc[0]["file"]
+    folder = cfg["paths"]["submit_ready"] / "smp_contoh"
+    mark_uploaded(cfg["paths"]["submit_ready"], first)
+    assert "upload_file_not_on_site" not in checks(audit(cfg, export(cfg, std)))
+    site = export(cfg, std, change=(0, "Sesi", "C"))
+    assert "upload_file_not_on_site" in checks(audit(cfg, site))
+    later = folder / first.replace("1000", "1100")
+    shutil.copy(folder / first, later)
+    wb = openpyxl.load_workbook(later)
+    header = [c.value for c in wb.active[1]]
+    for r in wb.active.iter_rows(min_row=2):
+        if r[header.index("Nama Lengkap")].value == "Ani Satu":
+            r[header.index("Sesi")].value = "C"
+    wb.save(later)
+    mark_uploaded(cfg["paths"]["submit_ready"], later.name)
+    assert "upload_file_not_on_site" not in checks(audit(cfg, site))

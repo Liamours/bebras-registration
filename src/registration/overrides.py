@@ -29,7 +29,7 @@ def apply_overrides(df: pd.DataFrame, path: Path, source_file: str) -> tuple[pd.
     """
     if not path.exists():
         return df, []
-    table = pd.read_csv(path, dtype=str, encoding="utf-8").fillna("")
+    table = pd.read_csv(path, dtype=str, encoding="utf-8", keep_default_na=False)  # "NA" or "None" typed in a value stays text
     table = table[table["source_file"] == source_file]
     issues, df = [], df.copy()
     names = {int(r): letters(n) for r, n in zip(df["source_row"], df["Nama Lengkap"])}  # the student of each row as sent, before any override

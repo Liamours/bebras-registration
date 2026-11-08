@@ -21,7 +21,7 @@ def test_warnings_alone_give_no_reply(replies):
 
 def test_every_error_code_the_stages_can_raise_has_a_message(replies):
     errors = {"missing_name", "missing_school", "missing_nisn", "nisn_format", "unknown_value", "kelas_invalid",
-              "kategori_mismatch", "sesi_invalid", "sesi_category"}
+              "kategori_mismatch", "sesi_invalid", "sesi_category", "missing_column", "invalid_email"}
     rejects = {"reject_unreadable", "reject_no_table", "reject_no_rows", "reject_missing_column", "reject_old_template"}
     assert (errors | rejects) <= set(replies["codes"])
 

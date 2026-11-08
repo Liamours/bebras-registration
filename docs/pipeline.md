@@ -44,7 +44,7 @@ Rejection is for structure only, because a file with many bad rows usually has o
 `dedup` reads every processed table of `standardized/` and writes `students.csv` (one row per student, with `has_error` and a `note`), `duplicates.csv` (the report) and `school_review.csv`; the keys it gives are kept in `reference/assigned_keys.csv`. `partition` runs it first, so the upload files are always cut from a fresh table.
 
 - **Key.** NISN, kept as text with leading zeros. A student without a NISN gets `<bureau_code>_NNNNN` (`bureau_code` in the configuration: `telkomuniversity`). The number goes on from the highest one already in the stored keys or in the data. The key given to a row (source file and row) is stored in `reference/assigned_keys.csv`, which is not regenerated, so a rerun gives the same key and a number is never used twice. A student is the same student when name, school (its slug), class and email agree; a resent file with shifted rows finds the old key, and a student whose name or email was corrected gets a new key (listed as `same_name_in_school` while both exist), so once a student without a NISN is uploaded, send corrections as overrides and not as a new file; do not delete that file.
-- **The same key twice in one school.** The row with more filled fields is kept (on a tie the earlier file and row). Both rows are listed in the report, the dropped one marked `no`.
+- **The same key twice in one school.** When the rows agree on email, gender, class, category, Sesi, language, level and the companion (an empty value agrees with a filled one), the row with more filled fields is kept (on a tie the earlier file and row); both rows are listed in the report, the dropped one marked `no`. When they disagree on one of those values, no row is dropped: both are held and listed as `same_key_conflicting_values`, and the sender says which is right.
 - **The same key under two schools.** No automatic choice. Every row stays in `students.csv` with `has_error` set, so `partition` holds both schools, and the rows are listed in the report as `same_key_two_schools`. The decision is made with the senders, through the CP, and recorded in `overrides.csv`: a corrected NISN (`row,NISN,<right NISN>,reason`) or `__drop__` for a row that should not exist. After `standardize --force` and `dedup` the rerun gives the same result, because the override is applied again each time.
 - **The same name and school under different keys.** Listed as `same_name_in_school` and kept: it is one student entered twice or two students with one name, and only a person can tell.
 - **Traceability.** Every report line carries the source file and row number.
@@ -66,6 +66,8 @@ Rejection is for structure only, because a file with many bad rows usually has o
 - A school is held, and gets no file, when any of its rows has an error, when a row has a NISN that repeats in the batch, or when its name is missing. The reason is in `partition_report.csv`.
 - A school that sends more students later gets a new file with only the students that are in no earlier file of that school. Earlier files are not edited. To rebuild a file, delete it first.
 - `--kategori SiKecil,Siaga` writes only those categories, so that categories whose challenge comes first can be uploaded first. The rest follow in a later run as a new file.
+- `--school <slug>` cuts the named schools only. `--exclude-sesi B1` leaves the students of a full Sesi out; they go up later in a file of their own. `--resend-sesi G1` includes the students of a Sesi again although an earlier file holds them, after their Sesi was changed and their old accounts were deleted on the site.
+- A school is held when a folder with a similar name exists (the same letters apart from underscores) and its own folder does not: rename the folder if it is the same school, or create the empty folder of the slug if it is another. A file is never written over a file of the same minute, and a lock file of an upload file open in Excel is ignored.
 
 ## 4. Status
 
@@ -99,6 +101,7 @@ Every error code has a message in `configs/replies.yaml` (listed in [reply-templ
 | `review` | Issue records and the review report |
 | `replies` | Reply drafts from a review report |
 | `pipeline` | One workbook from reading to the written outputs |
+| `audit` | The student table of the site against the senders' cells and against our own files, and the upload files against the site; see `operations.md` |
 | `status` | File and school status tables |
 | `partition` | Split per school and write upload files |
 | `intake` | New submissions from the response sheet |

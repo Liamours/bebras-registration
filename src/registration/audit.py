@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from registration.fields import EMAIL, text
+from registration.fields import EMAIL, EMAIL_DOMAIN_TYPOS, text
 from registration.readers import read_workbook
 from registration.standardize import rename_headers
 
@@ -48,6 +48,12 @@ def first_phone(value: str) -> str:
 
 def explain(col: str, raw: str, site: str) -> str | None:
     """The name of the rule that explains why the site value differs from the sender's cell, or None."""
+    if col == "Email":  # dots and underscores count: a mailbox is exact apart from case and the first of several addresses
+        a, b = re.split(r"[;,/]", raw.replace(" ", "").casefold())[0].strip(".,;"), site.strip().casefold()
+        local, _, domain = a.partition("@")
+        if a == b:
+            return "format"
+        return "domain typo fixed" if domain in EMAIL_DOMAIN_TYPOS and f"{local}@{EMAIL_DOMAIN_TYPOS[domain]}" == b else None
     if letters(raw) == letters(site):
         return "format"
     if col == "Kelas":
@@ -76,6 +82,23 @@ def explain(col: str, raw: str, site: str) -> str | None:
     if col == "Bahasa":
         return "vocabulary" if letters(site) in letters(raw) or (letters(raw) in ("english", "bingg", "binggris") and site == "Inggris") else None
     return None
+
+
+def differ_from_files(s: pd.Series, w: pd.Series) -> list[tuple[str, str]]:
+    """Columns where the site differs from what our own files hold, stricter than the sender comparison: case counts for names and schools."""
+    found = []
+    alnum = lambda v: re.sub(r"[^A-Za-z0-9]", "", str(v))
+    for col in ("Nama Lengkap", "Nama Sekolah"):  # the site drops punctuation, never case
+        if alnum(s[col]) != alnum(w[SITE_COLUMNS[col]]):
+            found.append((col, "case or letters differ from our file"))
+    for col in ("Kota/Kabupaten", "Kategori", "Sesi", "Bahasa", "Jenjang Sekolah"):
+        if str(s[col]).strip() != str(w[SITE_COLUMNS[col]]).strip():
+            found.append((col, "differs from our file"))
+    if str(s["Email"]).strip().casefold().replace("-", "") != str(w["Email"]).strip().casefold().replace("-", "") and not (s["Email"] in ("", "-") and str(w["Email"]) in ("", "-")):
+        found.append(("Email", "differs from our file"))
+    if re.sub(r"\D", "", str(s["No Kontak Pendamping"])).lstrip("0") != re.sub(r"\D", "", str(w["No Kontak Pendamping"])).lstrip("0"):
+        found.append(("No Kontak Pendamping", "differs from our file"))
+    return found
 
 
 def load_raw(raw_dir: Path, cfg: dict) -> pd.DataFrame:
@@ -121,8 +144,10 @@ def audit(cfg: dict, site_path: Path) -> pd.DataFrame:
     site["_key"] = [(letters(n), letters(s)) for n, s in zip(site["Nama Lengkap"], site["Sekolah"])]
     std["_key"] = [(letters(n), letters(s)) for n, s in zip(std["Nama Lengkap"], std["Nama Sekolah"])]
     site_index = {k: i for i, k in enumerate(site["_key"])}
-    for k in set(site["_key"][site["_key"].duplicated()]):
-        add("repeated_on_site", "error", "/".join(k), why="the same name and school twice on the site")
+    std_counts, site_counts = std["_key"].value_counts(), site["_key"].value_counts()
+    for k, n in site_counts.items():
+        if n > std_counts.get(k, 0) and k in set(std["_key"]):
+            add("repeated_on_site", "error", "/".join(k), why="the same name and school more often on the site than in the files")
     for u in site["Username"][site["Username"].duplicated()]:
         add("repeated_on_site", "error", u, "Username", why="a username twice")
     std_keys = set(std["_key"])
@@ -138,8 +163,13 @@ def audit(cfg: dict, site_path: Path) -> pd.DataFrame:
         if s["_key"] not in site_index:
             add("held" if s["has_error"] == "True" else "missing_on_site", "warning" if s["has_error"] == "True" else "error", label, why="held with an error" if s["has_error"] == "True" else "a student of the files is not on the site")
             continue
+        if std_counts[s["_key"]] > 1:  # two students with one name and school: the match by name cannot tell them apart
+            add("homonym", "warning", label, why="two students with the same name and school, compared by hand")
+            continue
         w = site.iloc[site_index[s["_key"]]]
         r = raw_by_ref[ref]
+        for col, why in differ_from_files(s, w):
+            add("site_differs_from_files", "error", label, col, s[col], str(w[SITE_COLUMNS[col]]), why)
         for col, scol in SITE_COLUMNS.items():
             a, b = text(r[col]) if str(r[col]) not in ("None", "nan") else "", str(w[scol])
             if b == "-":
@@ -155,6 +185,27 @@ def audit(cfg: dict, site_path: Path) -> pd.DataFrame:
         nisn = s["NISN"]
         if nisn_raw != nisn and (ref[0], ref[1], "NISN") not in overrides and nisn_raw.zfill(cfg["nisn_length"]) != nisn and not nisn.startswith(cfg["bureau_code"]):
             add("unexplained_change", "error", label, "NISN", nisn_raw, nisn, "the NISN differs from the sender's without a padded zero, an override or a bureau code")
+
+    # 2b every uploaded file against the site: a later file replaces the earlier rows of the same NISN
+    uploaded = cfg["paths"]["submit_ready"] / "uploaded.csv"
+    if uploaded.exists() and uploaded.stat().st_size > 20:
+        sent = set(pd.read_csv(uploaded, dtype=str)["file"])
+        latest: dict[tuple[str, str], tuple[str, pd.Series]] = {}
+        for f in sorted(cfg["paths"]["submit_ready"].glob("*/*.xlsx")):
+            if f.name in sent:
+                for _, u in pd.read_excel(f, dtype=str).fillna("").iterrows():
+                    latest[(f.parent.name, u["NISN"])] = (f.name, u)
+        for (folder, nisn), (fname, u) in latest.items():
+            k = (letters(u["Nama Lengkap"]), letters(u["Nama Sekolah"]))
+            if k not in site_index:
+                add("upload_file_not_on_site", "error", f"{fname}", "student", why="a student of an uploaded file is not on the site")
+                continue
+            w = site.iloc[site_index[k]]
+            for col in ("Sesi", "Kelas", "Kategori", "Bahasa", "Jenjang Sekolah", "Gender", "Email"):  # what the site cannot edit after the upload
+                a, b = str(u[col]).replace(".0", "") if col == "Kelas" else str(u[col]), str(w[SITE_COLUMNS[col]])
+                same = (a.casefold() == b.casefold()) or (col == "Gender" and a[:1].upper() == b[:1].upper()) or (col == "Email" and a in ("", "-") and b in ("", "-"))
+                if not same:
+                    add("upload_file_not_on_site", "error", f"{fname}", col, a, b, "the uploaded file and the site disagree on a value that cannot be edited on the site")
 
     # 3 sanity of every value on the site: a sender's typo passes, an absurd value is resolved
     nisn_seen: set[str] = set()

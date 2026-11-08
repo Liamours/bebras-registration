@@ -71,7 +71,7 @@ school.xlsx,9,Nama Lengkap,__drop__,duplicate of row 4
 
 ### When to use `--force`
 
-A file is skipped while it has not changed since its last run. A changed file is processed again without any flag. Use `--force` only after changing the overrides or the configuration, which the skip rule cannot see.
+A file is skipped while it has not changed since its last run. A change of a rule in the code is not seen by that test: run `standardize --force` on the folder after one. A changed file is processed again without any flag. Use `--force` only after changing the overrides or the configuration, which the skip rule cannot see.
 
 ## Partition and upload
 
@@ -102,6 +102,9 @@ uv run python -m registration audit --export <table exported from the site>
 | `raw_row_lost` | A sender row with data is neither on the site nor dropped for a stated reason (template example, drop override) |
 | `missing_on_site`, `site_extra`, `repeated_on_site`, `count` | A student of the files is missing, a student on the site has no sender row, a name or username is repeated, the counts differ |
 | `unexplained_change` | A cell differs from the sender's and is neither a format change, a listed override nor a rule that keeps the meaning (Kelas number, Gender vocabulary, Sesi label, phone format, Jenjang list, region, school-name rule, Bahasa vocabulary) |
+| `site_differs_from_files` | The site differs from our own standardized table, which is stricter than the sender comparison: case counts in names and school names, and the city, email, Sesi and phone must be equal |
+| `upload_file_not_on_site` | An uploaded file disagrees with the site on a value that cannot be edited there (Sesi, class, category, language, level, gender, email); a later file replaces the earlier rows of the same NISN |
+| `homonym` | Two students with the same name and school; compared by hand (a warning) |
 | `override_not_on_site` | The site does not hold the value of an override |
 | `absurd` | A value on the site that cannot be right: digits in a name, a lower-case word, a capital after an apostrophe, a Kelas outside the template, a Kategori, Jenjang or Sesi that does not fit, a NISN that is not 10 digits or a bureau code or repeats, an invalid email or phone |
 | `record` | An override without a reason or student, or a file marked uploaded without a verified line in the upload log |

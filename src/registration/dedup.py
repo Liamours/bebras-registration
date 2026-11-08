@@ -18,7 +18,8 @@ def fullness(row: pd.Series, null: str) -> int:
     return sum(1 for v in row if isinstance(v, str) and v not in ("", null))
 
 
-KEY_COLUMNS = ["source_file", "source_row", "key", "name_key", "school_key"]
+CONFLICT_COLUMNS = ["Email", "Gender", "Kelas", "Kategori", "Sesi", "Bahasa", "Jenjang Sekolah", "Nama Pendamping", "No Kontak Pendamping"]  # a student sent twice must agree on these
+KEY_COLUMNS =["source_file", "source_row", "key", "name_key", "school_key"]
 
 
 def assign_keys(data: pd.DataFrame, state_path: Path, code: str, null: str) -> pd.DataFrame:
@@ -35,7 +36,7 @@ def assign_keys(data: pd.DataFrame, state_path: Path, code: str, null: str) -> p
     data = data.copy()
     data["note"] = ""
     data["old_key"] = ""
-    order = list(data[data["NISN"] == null].sort_values(["source_file", "source_row"], key=lambda s: s.astype(str).str.zfill(8)).index)
+    order = list(data[(data["NISN"] == null) & (data["Nama Lengkap"] != null)].sort_values(["source_file", "source_row"], key=lambda s: s.astype(str).str.zfill(8)).index)
     # the same student is the same name, school (its slug, which a change of the master does not alter), class and email; two students that look alike
     # are told apart by the check on name and school instead of being merged
     refs = {i: (data.at[i, "source_file"], str(data.at[i, "source_row"])) for i in order}
@@ -122,6 +123,14 @@ def deduplicate(cfg: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
                 data.at[i, "has_error"] = True
                 data.at[i, "note"] = "the same NISN is under different names"
                 line("same_key_different_names", key, row, "held", "a NISN belongs to one student: ask the sender which NISN is right, then fix it in overrides.csv")
+            continue
+        clean = group[~group["has_error"]]  # a row with an error already loses to a clean row
+        differing = [c for c in CONFLICT_COLUMNS if len({letters(v) for v in clean[c] if v not in ("", null)}) > 1]
+        if differing:  # the same student sent twice with different values (a correction, or a mistake): which one counts is for the sender, never the file order
+            for i, row in group.iterrows():
+                data.at[i, "has_error"] = True
+                data.at[i, "note"] = "the same student is twice in the files with different values"
+                line("same_key_conflicting_values", key, row, "held", f"the rows differ in {', '.join(differing)}: ask the sender which is right, then drop the other row in overrides.csv")
             continue
         order = sorted(group.index, key=lambda i: (bool(group.at[i, "has_error"]), -fullness(group.loc[i], null), str(group.at[i, "source_file"]), int(group.at[i, "source_row"])))
         for n, i in enumerate(order):

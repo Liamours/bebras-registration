@@ -198,3 +198,25 @@ def test_the_school_name_in_the_bureau_column_is_replaced_by_our_bureau_but_anot
     table, issues = run(make_workbook, cfg, [row(**{"Nama Biro": "SMP Contoh"}), row(**{"Nama Biro": "Universitas Lain"})])
     assert list(table["Nama Biro"]) == ["Universitas Telkom", "Universitas Lain"]
     assert [(i.source_row, i.code, i.severity) for i in issues if i.column == "Nama Biro"] == [(2, "default_filled", "warning"), (3, "unknown_value", "error")]
+
+
+def test_an_invalid_email_holds_the_row_and_a_domain_typo_is_fixed_and_listed(make_workbook, cfg, row):
+    table, issues = run(make_workbook, cfg, [row(Email="andi.example.com"), row(Email="andi@gmail.con")])
+    assert errors(issues) == [(2, "invalid_email")] and table.loc[1, "Email"] == "andi@gmail.com"
+    assert ("email_domain_fixed", "warning") in [(i.code, i.severity) for i in issues]
+
+
+def test_a_column_missing_from_the_file_holds_every_row_and_kategori_alone_does_not(make_workbook, cfg, replies, row):
+    from tests.conftest import CANON
+
+    header = [c for c in CANON if c != "Sesi"]
+    rows = [[v for c, v in zip(CANON, row()) if c != "Sesi"]] * 2
+    process_file(make_workbook("k.xlsx", rows, header=header), cfg, replies, cfg["paths"]["standardized"])
+    report = pd.read_csv(cfg["paths"]["standardized"] / "k.review.csv")
+    assert sorted(report[report["code"] == "missing_column"]["source_row"]) == [2, 3] and set(report[report["code"] == "missing_column"]["severity"]) == {"error"}
+
+
+def test_na_typed_in_an_override_stays_text(make_workbook, cfg, replies, row):
+    cfg["paths"]["overrides"].write_text("source_file,row,column,new_value,reason,student\nschool.xlsx,2,Nama Pendamping,NA,sender wrote NA,Andi Test\n", encoding="utf-8")
+    process_file(make_workbook("school.xlsx", [row()]), cfg, replies, cfg["paths"]["standardized"])
+    assert pd.read_csv(cfg["paths"]["standardized"] / "school.csv", dtype=str, keep_default_na=False).loc[0, "Nama Pendamping"] == "Na"  # kept as text and cased like any name, not blanked

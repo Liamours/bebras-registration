@@ -101,6 +101,8 @@ def clean_email(value) -> tuple[str, list[tuple[str, str]]]:
     s = (parts[0] if parts else "").strip(".,;")
     if not EMAIL.match(s) or len(s) > EMAIL_MAX or len(s.split("@", 1)[0]) > EMAIL_LOCAL_MAX or "." not in s.split("@", 1)[1]:
         notes.append(("invalid_email", "not a valid email address"))
-    elif s.split("@", 1)[1] in EMAIL_DOMAIN_TYPOS:
-        notes.append(("email_domain_typo", f"domain may be a typo (did you mean @{EMAIL_DOMAIN_TYPOS[s.split('@', 1)[1]]}?)"))
+    elif s.split("@", 1)[1] in EMAIL_DOMAIN_TYPOS:  # a clear typo in the domain is fixed by us (owner's rule, 2026-11-07) and listed
+        local, domain = s.split("@", 1)
+        s = f"{local}@{EMAIL_DOMAIN_TYPOS[domain]}"
+        notes.append(("email_domain_fixed", f"domain @{domain} read as @{EMAIL_DOMAIN_TYPOS[domain]}"))
     return s, notes
