@@ -122,3 +122,11 @@ Run it after every upload and before accounts go to a CP. A new rule that change
 | `partition` says `nothing_new` for a school that has new students | The new students are in an earlier file | Check the earlier file's name and date |
 | `intake` lists a row but fetches nothing | The file is not shared | Download it by hand |
 | A configuration change has no effect | The file was skipped | Add `--force` |
+
+## Lineage of each student's values
+
+```bash
+uv run python -m registration lineage [--export <table exported from the site>]
+```
+
+`lineage` writes `data/lineage/lineage-<stamp>.csv`: one line for each student and field where the sender's cell, the cell of the file we uploaded, our final value or the value on the site differ. The columns are the four values and the reason of each step: `raw_to_final` (a format change, a named rule, an override with its reason, a padded zero, a bureau code) and `uploaded_to_site` (the site holds another value than the uploaded file: an edit on the site or a stale file). `uploaded_in` names the uploaded file and its time; `username` is the account on the site. The final checks follow this table, not only the sender's Excel: a value may have been changed by a rule, an override, a later upload or an edit on the site, and a line with `unexplained` or a `uploaded_to_site` reason that no change record explains is ours to resolve.

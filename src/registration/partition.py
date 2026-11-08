@@ -84,7 +84,7 @@ def load_checked(input_dir: Path, ignore_codes: set[str] = frozenset()) -> pd.Da
     return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
-def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = None, exclude_sesi: list[str] | None = None, only_schools: list[str] | None = None, resend_sesi: list[str] | None = None) -> pd.DataFrame:
+def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = None, exclude_sesi: list[str] | None = None, only_schools: list[str] | None = None, resend_sesi: list[str] | None = None, resend_nisn: list[str] | None = None) -> pd.DataFrame:
     """Write the upload files and return the report (also saved as partition_report.csv)."""
     input_dir = cfg["paths"][cfg["partition_input"]]
     out_dir = cfg["paths"]["submit_ready"]
@@ -122,7 +122,7 @@ def partition(cfg: dict, kategori: list[str] | None = None, stamp: str | None = 
         if exclude_sesi:  # a full Sesi: those students wait for the school's answer and go up later in a file of their own
             rows = rows[~rows["Sesi"].isin(exclude_sesi)]
         if folder.exists():  # a student of a resent Sesi was deleted on the site after a Sesi change and goes up again, whatever the earlier files hold
-            rows = rows[~rows["NISN"].isin(earlier_nisns(folder)) | rows["Sesi"].isin(resend_sesi or [])]
+            rows = rows[~rows["NISN"].isin(earlier_nisns(folder)) | rows["Sesi"].isin(resend_sesi or []) | rows["NISN"].isin(resend_nisn or [])]
         rows = rows.sort_values(["Kategori", "Nama Lengkap"]).reset_index(drop=True)
         if rows.empty:
             report.append([school, slug, "nothing_new", 0, "", "no student without an earlier upload file"])
