@@ -23,7 +23,8 @@ JENJANG_SITE = {"Preschool", "SD", "MTI", "SMP", "MTs", "SMA", "MA", "SMK", "MAK
 JENJANG_KELAS = {"Preschool": (0, 0), "SD": (1, 6), "MTI": (1, 6), "SMP": (7, 9), "MTs": (7, 9), "SMA": (10, 12), "SMK": (10, 12), "MA": (10, 12), "MAK": (10, 12)}
 REGIONS = {"Kota Bandung", "Kabupaten Bandung", "Kabupaten Bandung Barat", "Kota Cimahi"}
 SCHOOL_ABBREVIATIONS = {"negeri", "swasta", "smpn", "sman", "smkn", "sdit", "smpit", "smait", "mtsn", "madrasah", "sekolah", "dasar", "menengah", "pertama", "atas", "kejuruan"}  # words the school-name rule rewrites
-PLACE_WORDS = {"bandung", "cimahi", "kota", "kabupaten", "barat"}  # the master list leaves the place out of the name when the region column holds it
+PUNCTUATED = ("Nama Lengkap", "Nama Sekolah", "Nama Pendamping")
+PLACE_WORDS ={"bandung", "cimahi", "kota", "kabupaten", "barat"}  # the master list leaves the place out of the name when the region column holds it
 PARTICLES = {"bin", "binti", "bte", "van", "de", "der", "di", "da", "von", "ibn", "al", "el"}
 
 
@@ -161,7 +162,8 @@ def audit(cfg: dict, site_path: Path) -> pd.DataFrame:
             add("site_extra", "error", "/".join(k), why="a student on the site that no sender row produced")
 
     # 2 each cell: sender -> site
-    raw_by_ref = {(r["source_file"], r["source_row"]): r for _, r in raw.iterrows()}
+    lost: dict[tuple[str, str], list[str]] = {}
+    raw_by_ref ={(r["source_file"], r["source_row"]): r for _, r in raw.iterrows()}
     for _, s in std.iterrows():
         ref = (s["source_file"], s["source_row"])
         label = f"{ref[0][:40]}:{ref[1]}"
@@ -186,10 +188,17 @@ def audit(cfg: dict, site_path: Path) -> pd.DataFrame:
                 continue
             if explain(col, a, b) is None:
                 add("unexplained_change", "error", label, col, a, b, "the site value is neither the sender's nor a listed rule or override")
+        for col in PUNCTUATED:  # the upload drops these marks in every name; the edit form can restore a student and a school name, not a companion
+            a, b = text(r[col]) if str(r[col]) not in ("None", "nan") else "", str(w[SITE_COLUMNS[col]])
+            if re.search(r"[A-Za-z][-'’‘`][A-Za-z]", a) and not re.search(r"[-'’‘`]", b):
+                lost.setdefault((s["school_slug"], col), []).append(label)
         nisn_raw = re.sub(r"\.0+$", "", text(r["NISN"]).lstrip("'"))
         nisn = s["NISN"]
         if nisn_raw != nisn and (ref[0], ref[1], "NISN") not in overrides and nisn_raw.zfill(cfg["nisn_length"]) != nisn and not nisn.startswith(cfg["bureau_code"]):
             add("unexplained_change", "error", label, "NISN", nisn_raw, nisn, "the NISN differs from the sender's without a padded zero, an override or a bureau code")
+
+    for (school, col), refs in lost.items():  # one line per school and field, so a whole school does not drown the report
+        add("punctuation_lost", "warning", refs[0], col, "", "", f"{len(refs)} {school} row(s) lost a hyphen or an apostrophe of {col} on the site")
 
     # 2b every uploaded file against the site: a later file replaces the earlier rows of the same NISN
     uploaded = cfg["paths"]["submit_ready"] / "uploaded.csv"

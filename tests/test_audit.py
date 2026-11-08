@@ -156,3 +156,14 @@ def test_a_school_name_may_lose_the_place_that_the_region_column_holds():
     from registration.audit import explain
     assert explain("Nama Sekolah", "SMPN 99 CONTOH BANDUNG", "SMP Negeri 99 Contoh") == "school name rule"
     assert explain("Nama Sekolah", "SMPN 98 CONTOH BANDUNG", "SMP Negeri 99 Contoh") is None
+
+
+def test_a_hyphen_or_apostrophe_lost_in_any_name_is_one_warning_per_school_and_field(make_workbook, cfg, replies, row):
+    rows = [row(**{"Nama Lengkap": "Ani Satu", "NISN": 3000000001, "Nama Pendamping": "Budi O'Contoh"}),
+            row(**{"Nama Lengkap": "Budi Dua", "NISN": 3000000002, "Nama Pendamping": "Budi O'Contoh", "Gender": "perempuan"})]
+    std = prepare(make_workbook, cfg, replies, row, rows=rows)
+    path = export(cfg, std)
+    assert checks(audit(cfg, path)) == []
+    path.write_text(path.read_text(encoding="utf-8").replace("O'Contoh", "OContoh"), encoding="utf-8")
+    issues = audit(cfg, path)
+    assert checks(issues) == ["punctuation_lost"] and len(issues) == 1 and issues.iloc[0]["field"] == "Nama Pendamping" and "2 " in issues.iloc[0]["why"], issues.to_string()
