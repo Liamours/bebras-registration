@@ -30,7 +30,7 @@ def test_student_name_loses_degrees_but_accompanying_person_keeps_them():
     name, notes = clean_name("Siti Nur, S.Pd", student=True)
     assert name == "Siti Nur" and [c for c, _ in notes] == ["name_title_removed"]
     assert clean_name("Dr. Rina Wati, M.Pd", student=True)[0] == "Rina Wati"
-    assert clean_name("Endang Astuti, S.Pd", student=False) == ("Endang Astuti, S.Pd", [])
+    assert clean_name("Dewi Contoh, S.Pd", student=False) == ("Dewi Contoh, S.Pd", [])
 
 
 def test_stray_characters_digits_and_single_words_are_noted():
@@ -61,7 +61,7 @@ def test_phone_with_two_numbers_keeps_the_first_and_short_numbers_are_noted():
 def test_email_follows_the_html_standard_and_the_rfc_5321_lengths():
     bad = ["a..b@example.com@", "a@b", "@example.com", "a@-example.com", "a@example-.com", "a@exa_mple.com", "a@example..com",
            "é@example.com", "a" * 65 + "@example.com", "a@" + "b" * 64 + ".com", "a@" + ".".join(["b" * 60] * 5) + ".com"]
-    good = ["andi.test@example.com", "a+b@example.co.id", "o'brien@example.com", "x@a-b.example.com", "a" * 64 + "@example.com", "sitinur2025@sekolah.sch.id"]
+    good = ["andi.test@example.com", "a+b@example.co.id", "o'brien@example.com", "x@a-b.example.com", "a" * 64 + "@example.com", "budicontoh2025@sekolah.sch.id"]
     assert [e for e in bad if not [c for c, _ in clean_email(e)[1] if c == "invalid_email"]] == []
     assert [e for e in good if [c for c, _ in clean_email(e)[1] if c == "invalid_email"]] == []
 
@@ -75,8 +75,8 @@ def test_email_is_lowercased_and_checked():
 
 
 def test_brackets_and_excel_control_character_artifacts_are_removed():
-    name, notes = clean_name("Fina Nailatul Izzah (Slamet)", student=True)
-    assert name == "Fina Nailatul Izzah" and [c for c, _ in notes] == ["name_brackets"]
+    name, notes = clean_name("Ani Contoh (Budi)", student=True)
+    assert name == "Ani Contoh" and [c for c, _ in notes] == ["name_brackets"]
     assert clean_name("Budi Contoh, S.Kom_x0000_", student=False) == ("Budi Contoh, S.Kom", [])
 
 
