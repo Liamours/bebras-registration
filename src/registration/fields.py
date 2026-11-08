@@ -34,7 +34,7 @@ def text(value) -> str:
 
 def title_case(s: str) -> str:
     s = s.title()
-    s = re.sub(r"(?<=[a-z])'([A-Z])", lambda m: "'" + m.group(1).lower(), s)  # Ma'ruf, Rifa'i: str.title() would capitalize the letter after the apostrophe
+    s = re.sub(r"(?<=[a-z])'([A-Z])", lambda m: "'" + m.group(1).lower(), s)  # Ma'ruf: str.title() would capitalize the letter after the apostrophe
     return " ".join(w.upper() if ROMAN_TOKEN.match(w) else w for w in s.split(" "))
 
 
