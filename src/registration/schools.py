@@ -11,7 +11,7 @@ REGIONS = ("Kota Bandung", "Kabupaten Bandung", "Kabupaten Bandung Barat", "Kota
 STATE_PREFIX = {"smpn": "SMP Negeri", "smpn.": "SMP Negeri", "sman": "SMA Negeri", "smkn": "SMK Negeri", "sdn": "SD Negeri", "min": "MI Negeri",
                 "mtsn": "MTs Negeri", "man": "MA Negeri"}
 ACRONYMS = {"sd", "smp", "sma", "smk", "mi", "ma", "mak", "sdit", "smpit", "smait", "smkit", "sdii", "smpii", "smaii", "sdk", "smpk", "smak", "bpk", "bpi",
-            "sds", "smps", "smas", "smks", "tk", "it", "ii", "iii", "iv", "pgri", "ypi", "ypk", "nu", "uptd", "ikip", "pkbm", "kb"}
+            "sds", "smps", "smas", "smks", "mit", "tk", "it", "ii", "iii", "iv", "pgri", "ypi", "ypk", "nu", "uptd", "ikip", "pkbm", "kb"}
 SPECIAL = {"mts": "MTs", "mis": "MIS", "mts.": "MTs"}
 MIN_SUGGESTION = 0.85
 SHARED_MARK = "NPSN"  # a suggestion that carries an NPSN names a candidate of a shared name, not a close spelling

@@ -22,6 +22,7 @@ MASTER = pd.DataFrame(
         ("MTsN 2 Bandung", "MTs Negeri 2 Bandung"),
         ("SMP PLUS AL-AITAAM", "SMP Plus Al-Aitaam"),
         ("SDII AL ABIDIN YOGYAKARTA", "SDII Al Abidin Yogyakarta"),
+        ("MIT BAITUL AZIZ", "MIT Baitul Aziz"),
         ("  SMA   Telkom Bandung ", "SMA Telkom Bandung"),
     ],
 )
