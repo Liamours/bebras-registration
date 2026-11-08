@@ -59,7 +59,3 @@ Paths, thresholds, column lists and value lists live in `configs/default.yaml`. 
 ## Data
 
 Registration files contain personal data (student names, NISN, phone numbers). They are kept outside version control; `.gitignore` excludes them. Never commit a real registration file, a screenshot of one, or an example row copied from one. Use invented rows in tests.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
