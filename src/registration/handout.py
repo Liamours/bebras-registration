@@ -48,18 +48,14 @@ def file_stem(key: str, part: pd.DataFrame) -> str:
     return f"{slug(companion_names(part)[0])}-{key}" if not key.startswith("name_") else slug(companion_names(part)[0])
 
 
-def write_excel(path: Path, part: pd.DataFrame, header: dict) -> None:
-    """Sheet Akun holds the accounts (text cells, so a password with a leading zero keeps it); sheet Info names the companion and the schools."""
-    info = pd.DataFrame({"Keterangan": ["Pendamping", "No kontak", "Sekolah", "Jumlah peserta", "Situs"],
-                         "Isi": [" / ".join(companion_names(part)), header["phone"], " / ".join(part["Sekolah"].drop_duplicates()), len(part), header["site_url"]]})
+def write_excel(path: Path, part: pd.DataFrame) -> None:
+    """One sheet of text cells, so a password with a leading zero keeps it."""
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         part[ACCOUNT_COLUMNS].astype(str).to_excel(writer, sheet_name="Akun", index=False)
-        info.astype(str).to_excel(writer, sheet_name="Info", index=False)
-        for sheet in writer.book.worksheets:
-            for column in sheet.columns:
-                sheet.column_dimensions[column[0].column_letter].width = min(max(len(str(c.value or "")) for c in column) + 2, 60)
-                for cell in column:
-                    cell.number_format = "@"
+        for column in writer.book["Akun"].columns:
+            writer.book["Akun"].column_dimensions[column[0].column_letter].width = min(max(len(str(c.value or "")) for c in column) + 2, 60)
+            for cell in column:
+                cell.number_format = "@"
 
 
 def pdf_text(text) -> str:
@@ -68,6 +64,7 @@ def pdf_text(text) -> str:
 
 
 def write_pdf(path: Path, part: pd.DataFrame, header: dict) -> None:
+    """Title, the companion, then one table per school."""
     pdf = FPDF(format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -76,9 +73,6 @@ def write_pdf(path: Path, part: pd.DataFrame, header: dict) -> None:
     pdf.set_font("Helvetica", "", 10)
     pdf.ln(2)
     pdf.multi_cell(0, 5, pdf_text(f"Pendamping: {' / '.join(companion_names(part))}   No kontak: {header['phone']}"), new_x="LMARGIN", new_y="NEXT")
-    pdf.multi_cell(0, 5, pdf_text(f"Jumlah peserta: {len(part)}"), new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(2)
-    pdf.multi_cell(0, 5, pdf_text(header["intro"].format(site_url=header["site_url"])), align="L", new_x="LMARGIN", new_y="NEXT")
     for school, students in part.groupby("Sekolah", sort=False):
         pdf.ln(4)
         pdf.set_font("Helvetica", "B", 11)
@@ -111,7 +105,7 @@ def make_handouts(cfg: dict, export: Path, now: datetime | None = None) -> tuple
         if stem in stems:  # two companions with one name and different numbers keep apart
             stem = f"{stem}-{key}"
         stems[stem] = key
-        header = {"phone": key if not key.startswith("name_") else "-", "title": settings["title"], "intro": settings["intro"], "site_url": settings["site_url"]}
-        write_excel(out / f"{stem}.xlsx", part, header)
+        header = {"phone": key if not key.startswith("name_") else "-", "title": settings["title"]}
+        write_excel(out / f"{stem}.xlsx", part)
         write_pdf(out / f"{stem}.pdf", part, header)
     return out, len(parts), len(site)
